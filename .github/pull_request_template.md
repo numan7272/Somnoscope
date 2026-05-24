@@ -1,42 +1,42 @@
 <!--
-Vielen Dank für deinen Pull Request!
-Bitte fülle die folgenden Abschnitte aus. Lösche Punkte, die nicht zutreffen.
+Thanks for your pull request!
+Please fill in the sections below. Delete points that don't apply.
 -->
 
-## 🔗 Verknüpfter Issue
+## 🔗 Linked issue
 
-Closes #<nummer>
+Closes #<number>
 
-> ⚠️ Bitte das verlinkte Issue **nicht beim PR-Open** schließen — Issues werden
-> nach dem Merge mit einer Root-Cause-Notiz manuell geschlossen.
+> ⚠️ Please **don't close the linked issue when opening this PR** — issues are
+> closed manually after merge with a root-cause note.
 
-## ✏️ Was wurde geändert?
-<!-- Kurzer technischer Überblick. Welche Dateien/Module sind betroffen? -->
+## ✏️ What changed?
+<!-- Brief technical overview. Which files/modules are affected? -->
 
-## 🤔 Warum?
-<!-- Was war das Problem, das gelöst werden sollte? Welche Designentscheidungen
-     standen zur Auswahl, und warum wurde dieser Weg gewählt? -->
+## 🤔 Why?
+<!-- What problem was being solved? Which design choices were on the table,
+     and why was this path picked? -->
 
-## 🧪 Wie wurde getestet?
-<!-- Manuelle Tests, automatisierte Tests, Logfile-Auszüge.
-     Bei BLE/MQTT/Hardware-Themen: bitte konkret beschreiben (welches Gerät, welche Schritte). -->
+## 🧪 How was it tested?
+<!-- Manual tests, automated tests, log excerpts.
+     For BLE/MQTT/hardware topics: be specific (which device, which steps). -->
 
-## 📦 Art der Änderung
-- [ ] Bug-Fix (`fix/...`)
-- [ ] Neues Feature / Modul (`feat/...`)
-- [ ] Refactoring ohne Verhaltensänderung (`refac/...`)
-- [ ] Dokumentation (`docs/...`)
-- [ ] Wartung / Dependencies / CI (`chore/...`)
+## 📦 Type of change
+- [ ] Bug fix (`fix/...`)
+- [ ] New feature / module (`feat/...`)
+- [ ] Refactor without behavior change (`refac/...`)
+- [ ] Documentation (`docs/...`)
+- [ ] Maintenance / dependencies / CI (`chore/...`)
 
-## ✅ Checkliste
-- [ ] Branch-Name folgt dem Schema `<typ>/issue-<nr>-<kurztitel>`
-- [ ] `python main.py` läuft lokal ohne Fehler
-- [ ] Neue/geänderte Funktionen haben **deutsche Docstrings** (Args, Returns, Seiteneffekte)
-- [ ] Type-Hints konsequent (`str | None` statt `Optional[str]`)
-- [ ] Keine Cloud-Calls für Gesundheitsdaten eingeführt
-- [ ] Keine echten Tokens / EDF-Daten / Secrets im Diff
-- [ ] `config.yaml`-Schema angepasst, falls neue Module/Felder
-- [ ] CLAUDE.md / README.md aktualisiert, falls Architektur betroffen
+## ✅ Checklist
+- [ ] Branch name follows the `<type>/issue-<nr>-<shortname>` scheme
+- [ ] `python main.py` runs locally without errors
+- [ ] New/changed functions have **German docstrings** (args, returns, side effects)
+- [ ] Type hints are consistent (`str | None` instead of `Optional[str]`)
+- [ ] No cloud calls for health data introduced
+- [ ] No real tokens / EDF data / secrets in the diff
+- [ ] `config.yaml` schema updated if new modules/fields were added
+- [ ] CLAUDE.md / README.md updated if the architecture changed
 
-## 📎 Screenshots / Logs (optional)
-<!-- Bei UI- oder Logging-Änderungen: ein Vorher/Nachher hilft enorm. -->
+## 📎 Screenshots / logs (optional)
+<!-- For UI or logging changes: a before/after helps a lot. -->

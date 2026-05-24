@@ -1,46 +1,46 @@
 ---
 name: "🐛 Bug Report"
-about: Einen reproduzierbaren Fehler melden
-title: "[BUG] <Kurztitel>"
+about: Report a reproducible failure
+title: "[BUG] <short title>"
 labels: ["bug", "triage"]
 assignees: []
 ---
 
-## 🐛 Beschreibung
-<!-- Was läuft schief? Eine knappe Zusammenfassung in 1-3 Sätzen. -->
+## 🐛 Description
+<!-- What's going wrong? A short summary in 1-3 sentences. -->
 
-## ♻️ Reproduktionsschritte
-<!-- So genau wie möglich, damit andere den Bug nachstellen können. -->
+## ♻️ Reproduction steps
+<!-- As precise as possible so others can reproduce the bug. -->
 1.
 2.
 3.
 
-## ✅ Erwartetes Verhalten
-<!-- Was sollte stattdessen passieren? -->
+## ✅ Expected behavior
+<!-- What should happen instead? -->
 
-## ❌ Tatsächliches Verhalten
-<!-- Was passiert konkret? Fehler-Output, Screenshots, Log-Auszüge. -->
+## ❌ Actual behavior
+<!-- What happens concretely? Error output, screenshots, log excerpts. -->
 
 ```text
-<Stack-Trace oder Log-Output hier einfügen>
+<stack trace or log output here>
 ```
 
-## 🧩 Betroffenes Modul
-<!-- Welches Subsystem? Mehrfachauswahl möglich. -->
-- [ ] `core/` (Config, Logger)
-- [ ] `adapters/` (Wearable / BLE)
-- [ ] `iot/` (MQTT / Klimasensoren)
-- [ ] `ml_pipeline/` (Preprocessing / YASA)
+## 🧩 Affected module
+<!-- Which subsystem? Multiple selections allowed. -->
+- [ ] `core/` (config, logger)
+- [ ] `adapters/` (wearable / BLE)
+- [ ] `iot/` (MQTT / climate sensors)
+- [ ] `ml_pipeline/` (preprocessing / YASA)
 - [ ] `database/` (InfluxDB)
 - [ ] `llm_coach/` (LLM / RAG)
-- [ ] Dokumentation
-- [ ] Setup / Tooling
+- [ ] Documentation
+- [ ] Setup / tooling
 
-## 🖥️ Umgebung
-- **OS:** <!-- z.B. Raspberry Pi OS 12, Windows 11, Ubuntu 24.04 -->
-- **Python-Version:** <!-- `python --version` -->
-- **Somnoscope-Commit / Branch:** <!-- `git rev-parse --short HEAD` -->
-- **Hardware (falls relevant):** <!-- Fitbit Modell, ESP32 Variante, ... -->
+## 🖥️ Environment
+- **OS:** <!-- e.g., Raspberry Pi OS 12, Windows 11, Ubuntu 24.04 -->
+- **Python version:** <!-- `python --version` -->
+- **Somnoscope commit / branch:** <!-- `git rev-parse --short HEAD` -->
+- **Hardware (if relevant):** <!-- Fitbit model, ESP32 variant, ... -->
 
-## 📎 Zusatzkontext
-<!-- Alles weitere: Vermutungen über Root Cause, verwandte Issues, Workarounds. -->
+## 📎 Additional context
+<!-- Anything else: hypotheses about root cause, related issues, workarounds. -->

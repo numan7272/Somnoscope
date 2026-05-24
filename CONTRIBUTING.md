@@ -1,92 +1,96 @@
-# Mitmachen bei Somnoscope
+# Contributing to Somnoscope
 
-Danke, dass du Somnoscope verbessern möchtest. Damit das Repo langfristig sauber bleibt
-(und damit andere deine Fixes / Features auch tatsächlich nachvollziehen können), halten
-wir uns an ein paar feste Regeln.
+Thanks for wanting to improve Somnoscope. To keep the repo clean long-term — and to
+make sure your fixes and features are actually understandable to others — we follow
+a few non-negotiable rules.
 
-## Issue zuerst
+## Open an issue first
 
-**Jede Code-Änderung beginnt mit einem Issue** — auch ein vermeintlich winziger Bug.
-Das hat zwei Gründe:
+**Every code change starts with an issue** — even an apparently trivial bug. Two reasons:
 
-1. Die Issue-Historie ist die einzige Stelle, an der wir später nachlesen können,
-   *warum* eine Sache so geworden ist, wie sie ist.
-2. Doppelarbeit lässt sich vermeiden, wenn ein Vorhaben sichtbar ist.
+1. The issue history is the only place where we can later look up *why* something
+   was done a certain way.
+2. Duplicate work is avoided when intent is visible.
 
-Issue-Templates findest du unter [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/):
+Issue templates live under [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/):
 
-- **Bug Report:** für reproduzierbare Fehler
-- **Feature Request:** für neue Funktionen / Module
-- Für offene Fragen bitte die GitHub-Discussions nutzen, nicht Issues
+- **Bug Report:** for reproducible failures
+- **Feature Request:** for new functions or modules
+- For open-ended questions please use GitHub Discussions, not Issues
 
-## Branch-Namen
+## Branch names
 
-Format: `<typ>/issue-<nr>-<kurztitel>`
+Format: `<type>/issue-<nr>-<shortname>`
 
-| Typ      | Wann                                              |
+| Type     | When                                              |
 |----------|---------------------------------------------------|
-| `fix`    | Bug-Fix                                           |
-| `feat`   | Neues Feature / Modul                             |
-| `refac`  | Refactoring ohne Verhaltensänderung               |
-| `docs`   | Nur Dokumentation                                 |
-| `chore`  | Wartung (Dependencies, CI, Skripte)               |
+| `fix`    | Bug fix                                           |
+| `feat`   | New feature / module                              |
+| `refac`  | Refactor without behavior change                  |
+| `docs`   | Documentation only                                |
+| `chore`  | Maintenance (dependencies, CI, scripts)           |
 
-Beispiele:
+Examples:
 
 ```
 fix/issue-12-mqtt-reconnect-loop
 feat/issue-23-fitbit-ble-adapter
-docs/issue-7-architektur-diagramm
+docs/issue-7-architecture-diagram
 ```
 
-## Pull Requests
+## Pull requests
 
-- **Ein PR pro Issue.** Wenn dein PR mehrere Issues schließt, liegt das vermutlich
-  daran, dass die Issues zu klein geschnitten waren — kein Drama, einfach erwähnen.
-- **PR-Beschreibung folgt dem [Template](.github/pull_request_template.md):**
-  was geändert wurde, warum, wie getestet.
-- **`Closes #<nr>`** im PR-Body, damit GitHub den Issue beim Merge automatisch
-  verlinkt — aber **nicht automatisch schließt**, solange wir das nicht explizit
-  bestätigt haben (siehe nächster Punkt).
+- **One PR per issue.** If your PR closes multiple issues, the issues were probably
+  sliced too small — no drama, just mention it.
+- **The PR description follows the [template](.github/pull_request_template.md):**
+  what changed, why, how it was tested.
+- **`Closes #<nr>`** in the PR body so GitHub auto-links the issue on merge — but
+  **does not automatically close it** until we've explicitly confirmed the fix
+  (see next section).
 
-## Issue erst beim Merge schließen — nie beim PR-Open
+## Close issues at merge, not at PR-open
 
-Wenn der PR offen ist, ist der Bug *noch nicht* gelöst. Wir schließen Issues
-manuell mit einem **Kommentar, der die Root Cause + die gewählte Lösung
-zusammenfasst**. Das ist das wichtigste Artefakt für die Zukunft.
+While the PR is open, the bug is *not yet* fixed. We close issues manually with a
+**comment summarizing the root cause and the chosen solution**. That note is the
+most important artifact for the future.
 
-Schlechtes Beispiel:
+Bad example:
 
 > Fixed in #42. 👍
 
-Gutes Beispiel:
+Good example:
 
-> **Root Cause:** Der MQTT-Client hat auf `on_disconnect` keinen Backoff angewendet
-> und damit den Broker mit Reconnect-Versuchen geflutet.
+> **Root cause:** The MQTT client applied no backoff on `on_disconnect` and
+> flooded the broker with reconnect attempts.
 >
-> **Lösung:** Exponential Backoff in `iot/mqtt_subscriber.py` eingeführt, Cap bei
-> 60 Sekunden. Erweitert um Logging der Reconnect-Versuche, damit Phase-5-Debug
-> einfacher wird.
+> **Fix:** Added exponential backoff in `iot/mqtt_subscriber.py`, capped at 60s.
+> Also added structured logging of reconnect attempts to make Phase 5 debugging
+> easier.
 >
-> **Verifiziert mit:** lokalem Mosquitto + erzwungenem Disconnect via
-> `mosquitto_pub -t '#' -m 'kill'`. Logfile zeigt jetzt sauberen Backoff.
+> **Verified with:** local Mosquitto + forced disconnect via
+> `mosquitto_pub -t '#' -m 'kill'`. Logfile now shows clean backoff.
 
-## Code-Konventionen
+## Code conventions
 
-Detailliert in [CLAUDE.md](CLAUDE.md). Kurzfassung:
+Detailed in [CLAUDE.md](CLAUDE.md). Short version:
 
-- **Python 3.10+**, `asyncio` für alle I/O-Pfade
-- **Type-Hints** konsequent (`str | None` statt `Optional[str]`)
-- **Docstrings auf Deutsch**, Google-Style, mit Zweck / Args / Returns / Seiteneffekten
-- **Logging statt print** (Ausnahme: CLI-Bootstrap in `main.py`)
-- **Keine** Cloud-API-Calls für Gesundheitsdaten
+- **Python 3.10+**, `asyncio` for all I/O paths
+- **Type hints** everywhere (`str | None` instead of `Optional[str]`)
+- **German docstrings** (Google style) — args, returns, side effects
+- **Logging, not `print`** (exception: the CLI bootstrap in `main.py`)
+- **No cloud calls** for health data — ever
+
+> Note: docstrings and inline comments are in German because the original author
+> works in German. PR descriptions, issue conversations, and the README are in
+> English. If you're contributing and prefer English in docstrings, raise it in
+> an issue first — we may switch over time.
 
 ## Tests
 
-Phase 1 hat noch keine Tests — ab Phase 2 erwarten wir `pytest`-Tests für jeden
-neuen Parser/Adapter. Pfad: `tests/` (wird angelegt, wenn der erste Test entsteht).
+Phase 1 has no tests yet — starting in Phase 2 we expect `pytest` tests for every
+new parser/adapter. Path: `tests/` (created when the first test lands).
 
-## Setup vor dem ersten Commit
+## Setup before your first commit
 
 ```bash
 python -m venv .venv
@@ -94,9 +98,9 @@ source .venv/bin/activate          # Linux/macOS
 # .venv\Scripts\Activate.ps1       # Windows PowerShell
 
 pip install -r requirements.txt
-python main.py                     # Sollte ohne Fehler durchlaufen
+python main.py                     # should run without errors
 ```
 
-## Fragen?
+## Questions?
 
-Issue oder Discussion öffnen — wir antworten so schnell wie möglich.
+Open an issue or start a discussion — we'll respond as quickly as we can.

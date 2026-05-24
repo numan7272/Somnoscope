@@ -1,42 +1,42 @@
 ---
 name: "✨ Feature Request"
-about: Eine neue Funktion oder ein neues Modul vorschlagen
-title: "[FEAT] <Kurztitel>"
+about: Propose a new function or module
+title: "[FEAT] <short title>"
 labels: ["enhancement", "triage"]
 assignees: []
 ---
 
-## 🎯 Problem / Motivation
-<!-- Welches Problem soll gelöst werden? Was geht heute nicht oder schlecht? -->
+## 🎯 Problem / motivation
+<!-- What problem should be solved? What's missing or broken today? -->
 
-## 💡 Vorgeschlagene Lösung
-<!-- Wie könnte die Lösung aussehen? Skizziere die wichtigsten Schritte. -->
+## 💡 Proposed solution
+<!-- What could the solution look like? Sketch the main steps. -->
 
-## 🧩 Welches Modul betrifft das?
-- [ ] `core/` (Config, Logger)
-- [ ] `adapters/` (Wearable / BLE)
-- [ ] `iot/` (MQTT / Klimasensoren)
-- [ ] `ml_pipeline/` (Preprocessing / YASA)
+## 🧩 Affected module
+- [ ] `core/` (config, logger)
+- [ ] `adapters/` (wearable / BLE)
+- [ ] `iot/` (MQTT / climate sensors)
+- [ ] `ml_pipeline/` (preprocessing / YASA)
 - [ ] `database/` (InfluxDB)
 - [ ] `llm_coach/` (LLM / RAG)
-- [ ] Neues Modul: __________
-- [ ] Dokumentation / Tooling
+- [ ] New module: __________
+- [ ] Documentation / tooling
 
-## 🛠️ Implementierungsskizze
-<!-- Optional, aber sehr willkommen: welche Klassen / Dateien wären betroffen? -->
+## 🛠️ Implementation sketch
+<!-- Optional but very welcome: which classes / files would be touched? -->
 
-## 🔄 Alternativen
-<!-- Hast du andere Ansätze in Betracht gezogen? Warum wurden sie verworfen? -->
+## 🔄 Alternatives considered
+<!-- Other approaches you thought about, and why you rejected them. -->
 
-## 🧭 Passt das zur Roadmap?
-<!-- Phase 1-6, siehe README. Wenn unklar: einfach Frage stellen. -->
-- [ ] Phase 1 (Infrastruktur)
-- [ ] Phase 2 (BLE-Adapter)
+## 🧭 Roadmap fit
+<!-- Phases 1-6, see README. If unclear, just ask. -->
+- [ ] Phase 1 (infrastructure)
+- [ ] Phase 2 (BLE adapter)
 - [ ] Phase 3 (MQTT / IoT)
-- [ ] Phase 4 (ML-Pipeline)
-- [ ] Phase 5 (Persistenz)
-- [ ] Phase 6 (LLM-Coach)
-- [ ] Cross-cutting / unklar
+- [ ] Phase 4 (ML pipeline)
+- [ ] Phase 5 (persistence)
+- [ ] Phase 6 (LLM coach)
+- [ ] Cross-cutting / unclear
 
-## 📎 Zusatzkontext
-<!-- Links zu Papers, ähnlichen Projekten, eigenen Notizen. -->
+## 📎 Additional context
+<!-- Links to papers, similar projects, your own notes. -->
