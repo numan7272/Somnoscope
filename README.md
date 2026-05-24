@@ -4,54 +4,54 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Status: WIP](https://img.shields.io/badge/status-work--in--progress-orange.svg)](#roadmap)
 
-> *Somnoscope* — wörtlich "Schlaf-Mikroskop". Ein lokaler Schlaftracker, der
-> Wearable-, Klima- und ML-Daten zusammenführt, ohne Cloud, ohne Vendor-Lock-in
-> und ohne den Anspruch, ein Endergebnis zu sein, das man nicht selbst auditieren kann.
+> *Somnoscope* — literally a "sleep microscope." A local sleep tracker that fuses
+> wearable, climate, and ML data — no cloud, no vendor lock-in, and no claim to be
+> a finished product you can't audit yourself.
 
-**Status:** Phase 1 — Infrastruktur-Fundament. Noch nicht produktiv nutzbar.
+**Status:** Phase 1 — infrastructure foundation. Not production-ready yet.
 
 ## Motivation
 
-Kommerzielle Schlaftracker liefern einen "Sleep Score" und ein paar Balken, aber:
+Commercial sleep trackers give you a "sleep score" and a few colored bars, but:
 
-- Die Rohdaten bleiben in proprietären Clouds.
-- Die Scoring-Algorithmen sind nicht einsehbar.
-- Sensor-Fusion mit dem Raumklima (CO₂, Temperatur, Luftfeuchte) findet schlicht nicht
-  statt — obwohl genau das oft der Grund für unruhigen Schlaf ist.
+- Raw data stays locked inside proprietary clouds.
+- Scoring algorithms are not inspectable.
+- Sensor fusion with room climate (CO₂, temperature, humidity) simply doesn't
+  happen — even though that's often the actual reason for restless nights.
 
-Somnoscope ist der Versuch, diese drei Probleme auf einem Raspberry Pi oder einem
-gewöhnlichen Linux-Host zu lösen. Das System soll auch dann sinnvolle Auswertungen
-liefern, wenn nur ein Wearable verbunden ist — IoT-Sensoren und LLM-Coach sind
-optionale Plug-and-Play-Module.
+Somnoscope is an attempt to solve all three problems on a Raspberry Pi or any
+ordinary Linux host. The system should still deliver useful analysis when only
+a single wearable is connected — IoT sensors and the LLM coach are optional
+plug-and-play modules.
 
-## Features (geplant / in Arbeit)
+## Features (planned / in progress)
 
-| Feature                          | Status        | Modul              |
-|----------------------------------|---------------|--------------------|
-| Config-getriebene Modularität    | ✅ Phase 1    | `core/`            |
-| BLE-Wearable-Adapter             | ⏳ Phase 2    | `adapters/`        |
-| MQTT-Klimasensor-Integration     | ⏳ Phase 3    | `iot/`             |
-| SciPy-Preprocessing + EDF-Export | ⏳ Phase 4    | `ml_pipeline/`     |
-| YASA-Schlafphasen-Scoring        | ⏳ Phase 4    | `ml_pipeline/`     |
-| InfluxDB-Persistenz              | ⏳ Phase 5    | `database/`        |
-| Lokaler LLM-Coach (Ollama)       | ⏳ Phase 6    | `llm_coach/`       |
+| Feature                              | Status        | Module             |
+|--------------------------------------|---------------|--------------------|
+| Config-driven modularity             | ✅ Phase 1    | `core/`            |
+| BLE wearable adapter                 | ⏳ Phase 2    | `adapters/`        |
+| MQTT climate-sensor integration      | ⏳ Phase 3    | `iot/`             |
+| SciPy preprocessing + EDF export     | ⏳ Phase 4    | `ml_pipeline/`     |
+| YASA sleep-stage scoring             | ⏳ Phase 4    | `ml_pipeline/`     |
+| InfluxDB persistence                 | ⏳ Phase 5    | `database/`        |
+| Local LLM coach (Ollama)             | ⏳ Phase 6    | `llm_coach/`       |
 
-## Architektur
+## Architecture
 
 ```
-[ BLE-Wearable ]──┐
+[ BLE wearable ]──┐
                   ├──► [ adapters/ ] ──► [ ml_pipeline/ ] ──► [ database/ ] ──► [ Grafana ]
-[ ESP32 Klima ]───┤            │              │                       │
+[ ESP32 climate ]─┤            │              │                       │
    (via MQTT)     │            │              │                       │
                   └──► [ iot/ ]                └──► [ llm_coach/ ] ────┘
 ```
 
-Alle Schritte laufen lokal auf einer Maschine. Die einzelnen Module kommunizieren über
-`asyncio`-Queues und einen zentralen Config-Loader.
+Everything runs locally on a single host. Modules communicate through `asyncio`
+queues and a central config loader.
 
 ## Quickstart
 
-> ⚠️ Funktionsumfang ist aktuell auf Bootstrap beschränkt — siehe Roadmap.
+> ⚠️ Current functionality is limited to bootstrapping — see the roadmap below.
 
 ```bash
 git clone https://github.com/numan7272/Somnoscope.git
@@ -65,12 +65,12 @@ pip install -r requirements.txt
 python main.py
 ```
 
-`main.py` liest die `config.yaml`, schreibt Logs nach `logs/somnoscope.log` und gibt
-im Terminal aus, welche Module laut Config aktiv sind.
+`main.py` reads `config.yaml`, writes logs to `logs/somnoscope.log`, and prints
+which modules are currently active to the terminal.
 
-## Konfiguration
+## Configuration
 
-`config.yaml` steuert alle Module. Auszug:
+`config.yaml` controls every module. Excerpt:
 
 ```yaml
 wearable:
@@ -79,50 +79,53 @@ wearable:
   mac_address: "AA:BB:CC:DD:EE:FF"
 
 climate_sensors:
-  enabled: false   # Modul wird übersprungen, wenn false
+  enabled: false   # module is skipped when false
 
 llm_coach:
   enabled: false
 ```
 
-Jedes optionale Modul kann jederzeit aktiviert oder deaktiviert werden, ohne den Rest
-zu brechen.
+Any optional module can be toggled on or off at any time without breaking the rest
+of the system (graceful degradation).
 
-## Tech-Stack
+## Tech Stack
 
 * Python 3.10+ (`asyncio`)
-* `bleak` für BLE
-* `paho-mqtt` für IoT-Sensoren
-* `scipy`, `mne`, `yasa` für Signal-Processing und Sleep-Scoring
-* `influxdb-client` für Persistenz
-* Optional: `ollama` / `llama-cpp-python` für lokalen LLM-Coach
+* `bleak` for BLE
+* `paho-mqtt` for IoT sensors
+* `scipy`, `mne`, `yasa` for signal processing and sleep scoring
+* `influxdb-client` for persistence
+* Optional: `ollama` / `llama-cpp-python` for the local LLM coach
 
 ## Roadmap
 
-- [x] Phase 1 — Config-Loader, Logger, Bootstrap
-- [ ] Phase 2 — BLE-Wearable-Adapter (Fitbit als erste Referenz)
-- [ ] Phase 3 — MQTT-Subscriber für ESP32-Klimadaten
-- [ ] Phase 4 — Preprocessing + YASA-Scoring
-- [ ] Phase 5 — InfluxDB-Writer + Grafana-Dashboards
-- [ ] Phase 6 — Lokaler LLM-Coach via RAG
+- [x] Phase 1 — config loader, logger, bootstrap
+- [ ] Phase 2 — BLE wearable adapter (Fitbit as the first reference)
+- [ ] Phase 3 — MQTT subscriber for ESP32 climate data
+- [ ] Phase 4 — preprocessing + YASA scoring
+- [ ] Phase 5 — InfluxDB writer + Grafana dashboards
+- [ ] Phase 6 — local LLM coach via RAG
 
-## Mitmachen
+## Contributing
 
-Bugs und Ideen gehen über [GitHub Issues](https://github.com/numan7272/Somnoscope/issues).
-Den vollständigen Workflow beschreibt [CONTRIBUTING.md](CONTRIBUTING.md). Kurzfassung:
+Bugs and ideas go through [GitHub Issues](https://github.com/numan7272/Somnoscope/issues).
+The full workflow is documented in [CONTRIBUTING.md](CONTRIBUTING.md) (currently in
+German — English translation coming soon). Short version:
 
-1. **Issue zuerst** — auch für kleine Bugs, mit Repro-Schritten und erwartetem Verhalten.
-2. **Branch pro Issue** — Format: `fix/issue-<nr>-kurztitel` bzw. `feat/issue-<nr>-kurztitel`.
-3. **Root Cause + Lösung im Issue dokumentieren.**
-4. **Issue erst beim Merge schließen** — nicht beim PR-Open.
+1. **Open an issue first** — even for small bugs, with reproduction steps and
+   expected behavior.
+2. **One branch per issue** — format: `fix/issue-<nr>-shortname` or
+   `feat/issue-<nr>-shortname`.
+3. **Document root cause and chosen solution in the issue.**
+4. **Close the issue only when the PR is merged** — not when it's opened.
 
-## Lizenz
+## License
 
-MIT — siehe [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
-## Datenschutz-Hinweis
+## Privacy notice
 
-Somnoscope verarbeitet Gesundheitsdaten. Auch wenn alles lokal läuft: Wer das System
-über das eigene Netz hinaus exponiert (z.B. Grafana ins Internet stellt), ist selbst
-für Auth, TLS und DSGVO-Konformität verantwortlich. Die Defaults sind bewusst
-"localhost only".
+Somnoscope processes health data. Even though everything runs locally: if you
+expose the system beyond your own network (e.g., by putting Grafana on the public
+internet), you are responsible for authentication, TLS, and GDPR/HIPAA compliance
+yourself. The defaults are deliberately "localhost only."
