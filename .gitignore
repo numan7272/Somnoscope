@@ -1,0 +1,53 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ---- Virtuelle Umgebungen ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- IDEs / Editoren ----
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---- Build / Packaging ----
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# ---- Tests / Coverage ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Somnoscope-spezifisch ----
+logs/
+data/
+
+# Schlafrohdaten dürfen NICHT eingecheckt werden (Privacy First).
+*.edf
+*.edf.gz
+*.fif
+*.bdf
+
+# Lokale Konfig-Overrides
+config.local.yaml
+
+# Secret / Token Files
+.env
+.env.*
+*.token
+*.pem

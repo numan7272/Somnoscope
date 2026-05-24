@@ -1,0 +1,126 @@
+# ============================================================================
+# Somnoscope — Zentrale Steuerungsdatei
+# ============================================================================
+# Diese Datei bestimmt, welche Module beim Start von `main.py` aktiviert werden.
+# Jeder Modul-Block hat ein `enabled`-Flag. Steht es auf `false`, wird das Modul
+# komplett übersprungen — der Rest läuft weiter (Graceful Degradation).
+#
+# Geheimnisse (Tokens, Passwörter) gehören NICHT in diese Datei, sondern in
+# Umgebungsvariablen. Wir referenzieren sie hier nur über ${ENV:VARNAME}.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# System-weite Einstellungen
+# ----------------------------------------------------------------------------
+system:
+  # Log-Level für die gesamte Anwendung (DEBUG | INFO | WARNING | ERROR | CRITICAL)
+  log_level: "INFO"
+
+  # Ablage für persistente Daten (EDF-Files, JSON-Exports, Caches).
+  # Wird relativ zum Projekt-Root aufgelöst, absolute Pfade sind erlaubt.
+  data_dir: "./data"
+
+  # Verzeichnis für Logfiles. Wird automatisch erstellt, falls nicht vorhanden.
+  log_dir: "./logs"
+
+  # Zeitzone für Schlafphasen-Timestamps. Lokal sinnvoll, damit Grafana-Dashboards
+  # nicht ständig umgerechnet werden müssen.
+  timezone: "Europe/Berlin"
+
+
+# ----------------------------------------------------------------------------
+# Wearable (Pflicht-Modul: ohne mindestens ein Wearable macht das System keinen Sinn)
+# ----------------------------------------------------------------------------
+wearable:
+  enabled: true
+
+  # Welcher Adapter aus /adapters wird verwendet?
+  # Aktuell vorgesehen: "fitbit_ble", "apple_watch_udp"
+  device_type: "fitbit_ble"
+
+  # MAC-Adresse des BLE-Geräts. Wird beim BLE-Scan zur Auswahl genutzt.
+  # Auf Linux/Windows im Format "AA:BB:CC:DD:EE:FF", auf macOS UUID.
+  mac_address: "AA:BB:CC:DD:EE:FF"
+
+  # Intervall in Sekunden zwischen Reconnect-Versuchen bei Verbindungsabbruch.
+  reconnect_interval_s: 30
+
+  # Maximaler Scan-Timeout pro Versuch (Sekunden).
+  scan_timeout_s: 15
+
+
+# ----------------------------------------------------------------------------
+# Klimasensoren via MQTT (optional)
+# ----------------------------------------------------------------------------
+# Empfängt CO2, Temperatur, Luftfeuchte von einem ESP32, der Daten an einen
+# lokalen Mosquitto-Broker publisht.
+climate_sensors:
+  enabled: false
+
+  broker_host: "localhost"
+  broker_port: 1883
+
+  # Wenn der Broker Authentifizierung verlangt, hier referenzieren:
+  # username: "${ENV:MQTT_USER}"
+  # password: "${ENV:MQTT_PASS}"
+
+  # Welche Topics abonniert werden. Wildcards ('+', '#') sind erlaubt.
+  topics:
+    - "bedroom/co2"
+    - "bedroom/temperature"
+    - "bedroom/humidity"
+
+  # Quality-of-Service (0 = at most once, 1 = at least once, 2 = exactly once)
+  qos: 1
+
+
+# ----------------------------------------------------------------------------
+# Datenbank — InfluxDB Time-Series (optional, aber dringend empfohlen für Phase 5+)
+# ----------------------------------------------------------------------------
+database:
+  enabled: false
+
+  url: "http://localhost:8086"
+  org: "somnoscope"
+  bucket: "sleep_metrics"
+
+  # Token wird aus der Umgebungsvariable gelesen, damit nichts ins Repo leakt.
+  token_env_var: "INFLUXDB_TOKEN"
+
+
+# ----------------------------------------------------------------------------
+# Machine-Learning-Pipeline (optional in Phase 1, Pflicht ab Phase 4)
+# ----------------------------------------------------------------------------
+ml_pipeline:
+  enabled: false
+
+  # SciPy-Filter, die vor dem Scoring auf das Biosignal angewendet werden.
+  preprocessing:
+    bandpass_low_hz: 0.3
+    bandpass_high_hz: 35.0
+    notch_hz: 50.0          # 50Hz Netzbrumm (EU). In USA auf 60 ändern.
+
+  # YASA-Konfiguration
+  scorer:
+    backend: "yasa"
+    # Mindest-Aufzeichnungsdauer in Minuten, ab der gescort wird.
+    min_recording_minutes: 30
+
+
+# ----------------------------------------------------------------------------
+# Lokaler LLM-Coach (optional — Phase 6)
+# ----------------------------------------------------------------------------
+llm_coach:
+  enabled: false
+
+  # Backend: "ollama" oder "llama_cpp"
+  backend: "ollama"
+
+  # Bei ollama: laufender Server an dieser URL
+  ollama_url: "http://localhost:11434"
+
+  # Modell-Name (muss vorher mit `ollama pull <model>` heruntergeladen sein)
+  model: "llama3.1:8b-instruct-q4_K_M"
+
+  # Wie viel Schlafhistorie der LLM-Prompt einbeziehen darf (Tage)
+  context_window_days: 7

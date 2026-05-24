@@ -1,0 +1,27 @@
+# Somnoscope — Phase 1 Abhängigkeiten
+#
+# Versionen sind als Untergrenzen gepinnt: Wir wollen reproduzierbare Builds,
+# aber gleichzeitig Spielraum für Security-Patches. Bei einem Release-Tag
+# werden die Versionen via `pip freeze > requirements.lock` festgenagelt.
+
+# --- Core / Config ---
+PyYAML>=6.0.1                # config.yaml Parser
+
+# --- Bluetooth (Wearables) ---
+bleak>=0.21.1                # asynchrones Cross-Platform-BLE
+
+# --- IoT / MQTT ---
+paho-mqtt>=2.0.0             # Mosquitto-Client für ESP32-Klimadaten
+
+# --- Datenbank (Time-Series) ---
+influxdb-client>=1.40.0      # InfluxDB v2 HTTP-Client
+
+# --- Signalverarbeitung & ML ---
+numpy>=1.26.0                # Basis für scipy / mne / yasa
+scipy>=1.11.0                # Filter, Spektralanalyse
+mne>=1.6.0                   # EDF I/O und Biosignal-Strukturen
+yasa>=0.6.4                  # Sleep-Scoring auf EDF-Daten
+
+# --- Optional in späteren Phasen, hier vorbereitet ---
+# ollama>=0.1.7              # Wird in Phase 6 aktiviert
+# llama-cpp-python>=0.2.0    # Alternative zu ollama, in Phase 6

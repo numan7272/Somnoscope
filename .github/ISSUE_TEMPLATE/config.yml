@@ -1,0 +1,7 @@
+# Verhindert leere Issues — Nutzer müssen Bug Report oder Feature Request wählen.
+blank_issues_enabled: false
+
+contact_links:
+  - name: 💬 Diskussion / Frage
+    url: https://github.com/numan7272/Somnoscope/discussions
+    about: Für offene Fragen, Konzept-Diskussionen oder Hilfe beim Setup bitte die Discussions nutzen.
