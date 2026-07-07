@@ -56,7 +56,6 @@ wearable:
       metrics: ["sleep", "heart-rate", "heart-rate-variability", "oxygen-saturation"]
       poll_interval_s: 1800
       lookback_days: 2
-      user: "me"
 
     # --- Optionales Feature C: EEG-Headband (Muse) lokal über BrainFlow -------
     # ✅ 100 % lokal (erfüllt Kernprinzip 1). Slot vorbereitet, Impl folgt.

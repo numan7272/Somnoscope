@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 #: Absoluter Pfad zum Frontend (index.html, style.css, app.js).
 STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
 
+#: Obergrenze für den in-memory Coaching-Cache (Key: date|generated_at) —
+#: verhindert unbegrenztes Wachstum im Dauerbetrieb (FIFO-Eviction).
+_COACHING_CACHE_MAX = 64
+
 # --------------------------------------------------------------------------
 # Optionale Abhängigkeit: fastapi (Graceful Degradation, Kernprinzip 2)
 # --------------------------------------------------------------------------
@@ -292,6 +296,9 @@ def _create_app() -> "FastAPI":
                 # und wirft nie — der Event-Loop bleibt frei.
                 text = await generate_coaching(report, history, cfg)
                 cache[cache_key] = text
+                # Cache begrenzen: ältesten Eintrag (Einfüge-Reihenfolge) werfen.
+                if len(cache) > _COACHING_CACHE_MAX:
+                    cache.pop(next(iter(cache)))
         return {"enabled": True, "text": text, "date": date}
 
     return application

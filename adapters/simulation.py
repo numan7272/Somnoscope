@@ -275,10 +275,13 @@ class SimulationAdapter(WearableAdapter):
         except ValueError:
             hh, mm = 23, 0
         bedtime = time(hour=hh, minute=mm)
-        # Zubettgehen „gestern" um bedtime (bzw. vorletzte Nacht, wenn es noch
-        # vor dem heutigen bedtime ist — dann ist die jüngste vollständige Nacht
-        # die von vorgestern auf gestern).
+        # Zubettgehen „gestern" um bedtime.
         candidate = datetime.combine((now - timedelta(days=1)).date(), bedtime, tzinfo=tz)
+        # Läge das Ende dieser Nacht noch in der Zukunft (Daemon startet z.B.
+        # nachts um 01:00), ist die jüngste VOLLSTÄNDIGE Nacht die davor — sonst
+        # entstünden Zukunfts-Timestamps im Report.
+        if candidate + timedelta(hours=self._duration_h) > now:
+            candidate -= timedelta(days=1)
         return candidate
 
 

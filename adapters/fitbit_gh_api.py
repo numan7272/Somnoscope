@@ -103,7 +103,10 @@ class FitbitGoogleHealthAdapter(WearableAdapter):
         * ``poll_interval_s`` (int): Abfrage-Intervall. Default 1800.
         * ``lookback_days`` (int): Wie weit zurück je Poll abgefragt wird, damit
           spät synchronisierte Nächte nicht verloren gehen. Default 2.
-        * ``user`` (str): Health-API-User-ID. Default ``"me"``.
+
+    Der abgefragte Health-API-Nutzer ist immer der über ``ghealth setup``
+    authentifizierte Account — das CLI kapselt das, ein User-Argument gibt es
+    hier bewusst nicht.
     """
 
     def __init__(self, options: Mapping[str, Any], timezone: str = "UTC") -> None:
@@ -115,7 +118,6 @@ class FitbitGoogleHealthAdapter(WearableAdapter):
             m for m in metrics if m in GH_DATATYPE_TO_METRIC
         )
         self._lookback_days: int = int(self._options.get("lookback_days", 2))
-        self._user: str = str(self._options.get("user", "me"))
 
     @property
     def name(self) -> str:

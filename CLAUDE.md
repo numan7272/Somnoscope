@@ -41,32 +41,52 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 
 ---
 
-## 📂 Ziel-Ordnerstruktur
+## 📂 Ordnerstruktur (real)
 
 ```text
 /
 ├── CLAUDE.md               # Projektkontext für Claude (diese Datei)
 ├── README.md               # Benutzer-/Contributor-Doku
-├── requirements.txt        # Python-Abhängigkeiten
+├── CONTRIBUTING.md         # Workflow für Beiträge
+├── requirements.txt        # Python-Abhängigkeiten (Runtime)
+├── requirements-dev.txt    # Dev-/Test-Abhängigkeiten (pytest)
 ├── config.yaml             # Zentrale Steuerung (welche Module sind aktiv?)
-├── main.py                 # Einstiegspunkt, lädt Config und startet asynchrone Tasks
+├── main.py                 # Einstiegspunkt: python main.py [--once] [config-pfad]
+├── /.github
+│   └── workflows/ci.yml    # GitHub Actions: pytest auf Python 3.11/3.12
 ├── /core
-│   ├── __init__.py
 │   ├── config_loader.py    # Parst und validiert die config.yaml
-│   └── logger.py           # Zentrales Logging-Setup
+│   ├── constants.py        # Zentrale Konstanten (Adapter-Typen, Metriken, Stages)
+│   ├── logger.py           # Zentrales Logging-Setup
+│   └── pipeline.py         # SleepPipeline: Adapter → build_report → Store (+Klima)
 ├── /adapters
-│   ├── base_wearable.py    # Abstrakte Basisklasse
-│   ├── fitbit_ble.py       # Spezifischer Parser
-│   └── apple_watch_udp.py  # Spezifischer Parser
+│   ├── __init__.py         # Registry/Factory: create_adapters(cfg)
+│   ├── base_wearable.py    # Abstrakte Basisklasse + WearableReading
+│   ├── simulation.py       # Default-Adapter: synthetische Nächte, hardware-frei
+│   ├── fitbit_gh_api.py    # Feature B: Fitbit Air via Google Health API (opt-in)
+│   └── eeg_muse.py         # Feature C: Muse-EEG-Slot via BrainFlow (Stub)
 ├── /iot
-│   └── mqtt_subscriber.py  # Empfängt CO2/Temp/Luftfeuchte vom ESP32
+│   ├── mqtt_subscriber.py  # Empfängt CO2/Temp/Luftfeuchte vom ESP32
+│   └── climate_buffer.py   # Ringpuffer → report["climate"]-Mittelwerte
 ├── /ml_pipeline
-│   ├── preprocessor.py     # Filtert Rauschen (SciPy), konvertiert zu EDF
-│   └── scorer.py           # YASA-Implementierung für Schlafphasen
+│   ├── report.py           # build_report: Readings → SleepReport-Dict
+│   ├── scorer.py           # compute_sleep_score: Whitebox-Score 0–100
+│   └── preprocessor.py     # stage_raw_eeg: Roh-EEG → Phasen (MNE/YASA-Pfad)
 ├── /database
-│   └── influx_writer.py    # Schreibt Metriken in die InfluxDB
+│   ├── store.py            # SleepStore-Basisklasse (Interface)
+│   ├── sqlite_store.py     # SQLiteStore: Default-Backend, 100 % lokal
+│   └── influx_writer.py    # Optionaler InfluxDB-Zeitreihen-Kanal
 ├── /llm_coach
-│   └── prompt_builder.py   # RAG-Logik, kombiniert ML-JSON mit LLM-Prompt
+│   ├── coach.py            # generate_coaching: Ollama lokal + Regel-Fallback
+│   └── prompt_builder.py   # build_coach_prompt: Report+Historie → LLM-Prompt
+├── /webui
+│   ├── app.py              # FastAPI-App (`uvicorn webui.app:app`), /api/*-Endpoints
+│   └── static/             # Three.js-Dashboard (index.html, app.js, scene.js,
+│                           #   style.css, vendor/three.module.min.js — offline)
+├── /tests                  # pytest-Suite (97 Tests)
+├── /docs
+│   └── fitbit_air_setup.md # Feature-B-Setup (ghealth-CLI, Cloud-Ausnahme)
+├── /data                   # Lokale Daten (somnoscope.db — nicht eingecheckt)
 └── /logs                   # Lokale Log-Dateien (nicht eingecheckt)
 ```
 
@@ -104,12 +124,28 @@ Da das Projekt öffentlich auf GitHub steht, halten wir die Bug-Historie sauber:
 
 ## 🗺️ Phasen-Roadmap
 
-* **Phase 1 (aktuell):** Infrastruktur-Fundament — Config-Loader, Logger, Bootstrap
-* **Phase 2:** BLE-Adapter — `base_wearable.py` und ein erster konkreter Parser
-* **Phase 3:** IoT-Integration — MQTT-Subscriber für ESP32-Klimadaten
-* **Phase 4:** ML-Pipeline — SciPy-Preprocessing + YASA-Scoring
-* **Phase 5:** Persistenz — InfluxDB-Writer + Grafana-Dashboards
-* **Phase 6:** LLM-Coach — RAG-Pipeline mit lokalem Modell
+Alle sechs Phasen sind abgeschlossen — das Projekt ist feature-komplett
+(97 pytest grün, CI via GitHub Actions in `.github/workflows/ci.yml`).
+
+* **Phase 1 ✅:** Infrastruktur-Fundament — Config-Loader (`core/config_loader.py`),
+  Logger, Bootstrap (`main.py`, inkl. `--once`-Modus).
+* **Phase 2 ✅:** Wearable-Adapter — `base_wearable.py` + Registry/Factory
+  (`adapters/__init__.py`, konfiguriert über `wearable.adapters[]`):
+  `simulation` (Default AN, hardware-frei), `fitbit_gh_api` (Feature B, opt-in,
+  sanktionierte Cloud-Ausnahme), `eeg_muse` (Feature C, BrainFlow-Slot, AUS).
+  `fitbit_ble` ist NICHT implementierbar (BLE-Payload verschlüsselt, siehe
+  `docs/fitbit_air_setup.md`).
+* **Phase 3 ✅:** IoT-Integration — `iot/mqtt_subscriber.py` + `iot/climate_buffer.py`;
+  Klima-Mittelwerte landen als `report["climate"]` im SleepReport.
+* **Phase 4 ✅:** ML-Pipeline — `ml_pipeline/`: `build_report` (SleepReport-Dict),
+  `compute_sleep_score` (Whitebox-Score 0–100), `stage_raw_eeg` (YASA/MNE-Zukunftspfad).
+  Verdrahtet über `core/pipeline.py` (`SleepPipeline`, splittet Mehr-Nächte-Batches).
+* **Phase 5 ✅:** Persistenz + Dashboard — `database/`: `SQLiteStore` (Default, lokal)
+  und optionaler `InfluxWriter`; `webui/`: FastAPI (`webui/app.py:app`) + Three.js-
+  Dashboard „Schlaf-Observatorium" (lokal gevendort, offline, WebGL-Fallback,
+  prefers-reduced-motion, DOM-a11y-Layer). Start: `uvicorn webui.app:app`.
+* **Phase 6 ✅:** LLM-Coach — `llm_coach/`: lokales Ollama mit regelbasiertem
+  Fallback (nie Cloud), integriert als Coach-Karte im Dashboard (`/api/coaching`).
 
 ---
 
