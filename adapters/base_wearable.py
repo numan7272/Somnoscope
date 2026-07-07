@@ -148,6 +148,14 @@ class WearableAdapter(ABC):
                 ``(name, readings)`` — von der Pipeline genutzt, um pro Nacht
                 einen Report zu bauen.
         """
+        if sink is None and on_batch is None:
+            self._log.warning(
+                "[%s] kein Konsument (sink/on_batch) übergeben — Adapter wird "
+                "nicht gestartet.",
+                self.name,
+            )
+            return
+
         try:
             await self.open()
         except Exception:  # noqa: BLE001 — bewusst breit: Adapter darf System nicht reissen
@@ -172,15 +180,28 @@ class WearableAdapter(ABC):
                     )
                     readings = []
 
-                if on_batch is not None and readings:
-                    await on_batch(self.name, readings)
-                if sink is not None:
-                    for reading in readings:
-                        await sink(reading)
-                if readings:
-                    self._log.info(
-                        "[%s] %d Messpunkt(e) verarbeitet.", self.name, len(readings)
+                try:
+                    if on_batch is not None and readings:
+                        await on_batch(self.name, readings)
+                    if sink is not None:
+                        for reading in readings:
+                            await sink(reading)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 — ein Batch-Fehler darf die Schleife nicht beenden
+                    self._log.exception(
+                        "[%s] Batch-Verarbeitung fehlgeschlagen — nächster "
+                        "Versuch in %ds.",
+                        self.name,
+                        self.poll_interval_s,
                     )
+                else:
+                    if readings:
+                        self._log.info(
+                            "[%s] %d Messpunkt(e) verarbeitet.",
+                            self.name,
+                            len(readings),
+                        )
 
                 await asyncio.sleep(self.poll_interval_s)
         except asyncio.CancelledError:

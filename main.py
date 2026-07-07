@@ -112,8 +112,21 @@ async def main(cfg: AppConfig, *, once: bool = False) -> None:
             await asyncio.gather(*(pipeline.run_once(a) for a in adapters))
             logger.info("[pipeline] Einzeldurchlauf abgeschlossen.")
         else:
-            # Dauerbetrieb: läuft bis Strg-C (KeyboardInterrupt in _run()).
-            await asyncio.gather(*(pipeline.run(a) for a in adapters))
+            # Dauerbetrieb: läuft bis Strg-C. return_exceptions=True, damit ein
+            # unerwartet sterbender Adapter die anderen nicht mitreisst
+            # (Graceful Degradation) und der Store erst nach allen schliesst.
+            results = await asyncio.gather(
+                *(pipeline.run(a) for a in adapters), return_exceptions=True
+            )
+            for adapter, res in zip(adapters, results):
+                if isinstance(res, Exception) and not isinstance(
+                    res, asyncio.CancelledError
+                ):
+                    logger.error(
+                        "[pipeline] Adapter '%s' unerwartet beendet.",
+                        adapter.name,
+                        exc_info=res,
+                    )
     finally:
         await pipeline.aclose()
         await store.close()

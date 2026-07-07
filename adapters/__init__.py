@@ -39,6 +39,12 @@ _REGISTRY: dict[str, tuple[str, str]] = {
     ADAPTER_SIMULATION: ("adapters.simulation", "SimulationAdapter"),
 }
 
+#: Adapter-Typen, die einen SleepReport erzeugen (Schlafphasen liefern). Sind
+#: mehrere gleichzeitig aktiv, teilen sie sich den Report-Schlüssel 'date'.
+_REPORT_PRODUCING: frozenset[str] = frozenset(
+    {ADAPTER_SIMULATION, ADAPTER_FITBIT_GH_API, ADAPTER_EEG_MUSE}
+)
+
 #: Typen, die es (noch) nicht als lokalen Adapter geben kann — mit Begründung.
 _UNSUPPORTED: dict[str, str] = {
     ADAPTER_FITBIT_BLE: (
@@ -105,5 +111,17 @@ def create_adapters(cfg: AppConfig) -> list[WearableAdapter]:
             continue
 
         logger.debug("[factory] Adapter '%s' bereit.", atype)
+
+    # Warnen, wenn mehrere report-liefernde Adapter aktiv sind: sie schreiben
+    # denselben date-Schlüssel und überschreiben sich pro Nacht gegenseitig.
+    report_sources = [a for a in adapters if a.name in _REPORT_PRODUCING]
+    if len(report_sources) > 1:
+        logger.warning(
+            "[factory] Mehrere report-liefernde Adapter aktiv (%s). Sie teilen "
+            "sich den Report-Schlüssel 'date' und überschreiben sich pro Nacht "
+            "gegenseitig — für den Report-Kanal aktuell nur EINEN Adapter aktiv "
+            "lassen (weitere sind für InfluxDB/Vergleich ok).",
+            ", ".join(a.name for a in report_sources),
+        )
 
     return adapters

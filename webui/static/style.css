@@ -651,6 +651,83 @@ body.no-webgl .orb-anchor::before {
   color: var(--faint);
 }
 
+/* --- Schlaf-Coach (lokales LLM) ---------------------------------------------- */
+
+.coach-card {
+  position: relative;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: rgba(13, 18, 48, 0.55);
+  padding: clamp(22px, 4.5vw, 40px);
+  overflow: hidden; /* Spektrum-Linie sauber an den runden Ecken beschneiden */
+}
+
+/* Feine Phasen-Linie am Kopf der Karte — dieselben Farben wie Hypnogramm/Szene. */
+.coach-spectrum {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    var(--stage-deep), var(--stage-light), var(--stage-rem), var(--stage-wake));
+  opacity: 0.85;
+}
+
+.coach-status {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(16px, 2.2vw, 19px);
+  color: var(--dim);
+  animation: coach-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes coach-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.coach-text {
+  max-width: var(--measure);
+  font-family: var(--serif);
+  font-size: clamp(16px, 2.1vw, 18px);
+  line-height: 1.75;
+  color: var(--ink);
+  overflow-wrap: anywhere; /* nie horizontal scrollen, auch bei langen Wörtern */
+}
+
+.coach-text p + p,
+.coach-text p + ul,
+.coach-text ul + p { margin-top: 0.9em; }
+
+.coach-text ul {
+  list-style: none;
+  padding: 0;
+}
+.coach-text li {
+  position: relative;
+  padding-left: 22px;
+}
+.coach-text li + li { margin-top: 0.45em; }
+.coach-text li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.68em;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--stage-deep-ink);
+}
+
+.coach-note {
+  margin-top: clamp(18px, 3vh, 26px);
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
 /* --- Colophon ---------------------------------------------------------------- */
 
 .colophon {
@@ -727,6 +804,7 @@ body.no-webgl .orb-anchor::before {
     transform: none;
   }
   .state-moon { animation: none; }
+  .coach-status { animation: none; }
 }
 
 /* --- Responsive --------------------------------------------------------------------- */

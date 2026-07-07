@@ -8,6 +8,8 @@ schlanke JSON-API über den Report-Store aus :mod:`database`:
     * ``GET /static/...``         → CSS/JS-Assets
     * ``GET /api/report/latest``  → jüngster SleepReport (404 ``no_data`` wenn leer)
     * ``GET /api/reports?limit=N``→ Liste der letzten N Reports (neueste zuerst)
+    * ``GET /api/coaching``       → Coaching-Text des lokalen LLM-Coach zur
+      jüngsten Nacht (404 ``no_data`` wenn leer; in-memory gecacht pro Datum)
 
 Designentscheidungen:
     * **Graceful Degradation:** ``fastapi`` wird in ``try/except`` importiert.
@@ -45,6 +47,45 @@ try:
     _FASTAPI_AVAILABLE = True
 except ImportError:  # pragma: no cover — hängt von der Umgebung ab
     _FASTAPI_AVAILABLE = False
+
+
+def _load_cfg() -> Any | None:
+    """
+    Lädt die zentrale App-Konfiguration für den App-Lebenszyklus.
+
+    Wird genau einmal im Lifespan-Handler aufgerufen und in
+    ``app.state.cfg`` abgelegt — der Coaching-Endpoint braucht die Config
+    (``cfg.llm_coach``), ohne sie pro Request neu von Platte zu lesen.
+
+    Hinweis: :func:`_open_store` lädt die Config intern ein zweites Mal.
+    Das ist Absicht — dessen argumentloser Vertrag bleibt stabil (u.a. als
+    Monkeypatch-Naht der Tests), und ein doppelter YAML-Read beim Start ist
+    vernachlässigbar.
+
+    Returns:
+        Die geladene ``AppConfig`` oder ``None``, wenn Config-Modul oder
+        ``config.yaml`` nicht verfügbar sind (Graceful Degradation).
+
+    Seiteneffekte:
+        Liest ``config.yaml`` aus dem Arbeitsverzeichnis.
+    """
+    try:
+        from core.config_loader import load_config
+    except ImportError:
+        logger.exception(
+            "core.config_loader konnte nicht importiert werden — "
+            "der LLM-Coach steht im Dashboard nicht zur Verfügung."
+        )
+        return None
+
+    try:
+        return load_config()
+    except Exception:  # noqa: BLE001 — Dashboard darf an der Config nicht sterben
+        logger.exception(
+            "Konfiguration konnte nicht geladen werden — "
+            "der LLM-Coach steht im Dashboard nicht zur Verfügung."
+        )
+        return None
 
 
 def _open_store() -> Any | None:
@@ -96,16 +137,24 @@ def _create_app() -> "FastAPI":
     @asynccontextmanager
     async def _lifespan(application: FastAPI):
         """
-        Lifespan-Handler: Store einmalig öffnen, bei Shutdown schließen.
+        Lifespan-Handler: Config + Store einmalig öffnen, bei Shutdown schließen.
 
         Args:
-            application: Die FastAPI-Instanz; der Store wird in
-                ``application.state.store`` abgelegt.
+            application: Die FastAPI-Instanz; Config und Store werden in
+                ``application.state.cfg`` bzw. ``application.state.store``
+                abgelegt, dazu Cache und Lock für den Coaching-Endpoint
+                (``coaching_cache``/``coaching_lock``).
         """
-        # _open_store() macht blockierendes I/O (Config lesen, SQLite öffnen) —
-        # im async Lifespan daher in einen Thread auslagern (Asyncio-First).
+        # _load_cfg()/_open_store() machen blockierendes I/O (Config lesen,
+        # SQLite öffnen) — im async Lifespan daher in Threads auslagern
+        # (Asyncio-First).
+        application.state.cfg = await asyncio.to_thread(_load_cfg)
         store = await asyncio.to_thread(_open_store)
         application.state.store = store
+        # In-Memory-Cache für Coaching-Texte (Key: report["date"]) plus Lock,
+        # damit parallele Requests nicht mehrfach das lokale LLM anwerfen.
+        application.state.coaching_cache = {}
+        application.state.coaching_lock = asyncio.Lock()
         if store is not None:
             logger.info("WebUI: Report-Store geöffnet.")
         try:
@@ -181,6 +230,69 @@ def _create_app() -> "FastAPI":
         if store is None:
             return []
         return await store.list_reports(limit=limit)
+
+    @application.get("/api/coaching")
+    async def coaching() -> dict[str, Any]:
+        """
+        Liefert den Coaching-Text des lokalen LLM-Coach zur jüngsten Nacht.
+
+        Holt den jüngsten Report plus Historie (30 Nächte) aus dem Store und
+        ruft :func:`llm_coach.generate_coaching` (lokales Ollama mit
+        regelbasiertem Fallback, wirft nie). Da die Generierung bei laufendem
+        Ollama einige Sekunden dauern kann, wird das Ergebnis in-memory pro
+        ``report["date"]`` gecacht; wiederholte Aufrufe antworten sofort.
+        Ein ``asyncio.Lock`` verhindert, dass parallele Requests dieselbe
+        Nacht mehrfach generieren.
+
+        Returns:
+            ``{"enabled": bool, "text": str, "date": str}`` — ``enabled`` ist
+            ``False`` (mit leerem Text), wenn der Coach per Config deaktiviert
+            oder das Modul/die Config nicht verfügbar ist.
+
+        Raises:
+            HTTPException: ``404`` mit ``{"detail": "no_data"}``, wenn noch
+                kein Report vorliegt oder kein Store verfügbar ist.
+        """
+        store = getattr(application.state, "store", None)
+        if store is None:
+            raise HTTPException(status_code=404, detail="no_data")
+        report = await store.latest_report()
+        if report is None:
+            raise HTTPException(status_code=404, detail="no_data")
+
+        date = str(report.get("date") or "")
+        # Cache-Key enthält generated_at: ein neu gebauter Report (gleiches
+        # Datum, neue Daten) bekommt frisches Coaching statt veraltetem Text.
+        cache_key = f"{date}|{report.get('generated_at') or ''}"
+        cache: dict[str, str] = application.state.coaching_cache
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return {"enabled": True, "text": cached, "date": date}
+
+        cfg = getattr(application.state, "cfg", None)
+        if cfg is None or not cfg.llm_coach.enabled:
+            return {"enabled": False, "text": "", "date": date}
+
+        try:
+            from llm_coach import generate_coaching
+        except ImportError:
+            logger.exception(
+                "llm_coach konnte nicht importiert werden — "
+                "Coaching wird im Dashboard deaktiviert."
+            )
+            return {"enabled": False, "text": "", "date": date}
+
+        async with application.state.coaching_lock:
+            # Double-Check: ein parallel wartender Request kann den Text
+            # inzwischen bereits erzeugt haben.
+            text = cache.get(cache_key)
+            if text is None:
+                history = await store.list_reports(limit=30)
+                # generate_coaching ist async, nutzt intern asyncio.to_thread
+                # und wirft nie — der Event-Loop bleibt frei.
+                text = await generate_coaching(report, history, cfg)
+                cache[cache_key] = text
+        return {"enabled": True, "text": text, "date": date}
 
     return application
 

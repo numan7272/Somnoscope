@@ -468,6 +468,86 @@ function renderHistory(reports, current) {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Kapitel VI: Schlaf-Coach (lokales LLM, asynchron nachgeladen)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Rendert mehrzeiligen Coach-Text als Absätze + Aufzählungen (nur DOM-APIs,
+ * kein innerHTML). Bullet-Zeilen ("- ", "* ", "• ", "1. ") werden zu <ul>,
+ * Leerzeilen trennen Absätze.
+ */
+function renderCoachText(container, text) {
+  container.textContent = "";
+  const BULLET = /^\s*(?:[-*•–]|\d+[.)])\s+/;
+  let ul = null;
+  let para = [];
+
+  const flushPara = () => {
+    if (!para.length) return;
+    const p = document.createElement("p");
+    p.textContent = para.join(" ");
+    container.appendChild(p);
+    para = [];
+  };
+
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) { flushPara(); ul = null; continue; }
+    if (BULLET.test(line)) {
+      flushPara();
+      if (!ul) { ul = document.createElement("ul"); container.appendChild(ul); }
+      const li = document.createElement("li");
+      li.textContent = line.replace(BULLET, "");
+      ul.appendChild(li);
+    } else {
+      ul = null;
+      para.push(line);
+    }
+  }
+  flushPara();
+}
+
+/**
+ * Lädt /api/coaching und füllt die Coach-Karte. Zeigt während der (u.U.
+ * mehrere Sekunden dauernden) lokalen Generierung einen Ladezustand; bei
+ * Fehler, deaktiviertem Coach oder leerem Text wird das Kapitel wieder
+ * ausgeblendet. Läuft bewusst NACH dem Haupt-Rendering, blockiert nichts.
+ */
+async function loadCoaching() {
+  const section = el("coach-section");
+  const card = section.querySelector(".coach-card");
+  const status = el("coach-status");
+  const textEl = el("coach-text");
+
+  // Ladezustand: Kapitel einblenden, Karte als "beschäftigt" markieren.
+  section.hidden = false;
+  card.setAttribute("aria-busy", "true");
+  status.hidden = false;
+  textEl.textContent = "";
+  renumberChapters();
+
+  let data = null;
+  try {
+    data = await fetchJSON("/api/coaching");
+  } catch (err) {
+    console.warn("Somnoscope: Coaching konnte nicht geladen werden.", err);
+  }
+
+  const text = typeof data?.text === "string" ? data.text.trim() : "";
+  if (!data || data.enabled === false || !text) {
+    // Kein Coach verfügbar → Kapitel sauber entfernen statt leer stehen lassen.
+    section.hidden = true;
+    renumberChapters();
+    return;
+  }
+
+  status.hidden = true;
+  renderCoachText(textEl, text);
+  card.setAttribute("aria-busy", "false");
+  section.classList.add("is-visible"); // ggf. schon im Viewport → sofort zeigen
+}
+
+/* ------------------------------------------------------------------------- *
  * Rahmen: Masthead, Colophon, Kapitelnummern, Scroll-Reveal
  * ------------------------------------------------------------------------- */
 
@@ -627,6 +707,9 @@ async function main() {
   showState("report");
   setupReveal();
   bootScene(report);
+  // Coach-Text bewusst zuletzt und ohne await: die lokale LLM-Generierung
+  // darf dauern, das Dashboard steht längst. Fehler behandelt loadCoaching.
+  loadCoaching();
 }
 
 el("retry-btn").addEventListener("click", () => window.location.reload());

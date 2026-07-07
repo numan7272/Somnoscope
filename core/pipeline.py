@@ -18,7 +18,7 @@ reine Live-Vitalwert-Batches ohne Schlafphasen werden übersprungen.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from adapters.base_wearable import WearableReading
 from core.constants import METRIC_SLEEP_STAGE
@@ -29,6 +29,10 @@ if TYPE_CHECKING:  # nur für Type-Checker
     from database.store import SleepStore
 
 logger = logging.getLogger(__name__)
+
+#: Lücke (Sekunden) zwischen zwei Schlafphasen, ab der ein neuer Nacht-Cluster
+#: beginnt. Ein Poll-Batch kann mehrere Nächte enthalten (z.B. Fitbit-Lookback).
+_NIGHT_GAP_S = 4 * 3600
 
 
 class SleepPipeline:
@@ -47,6 +51,9 @@ class SleepPipeline:
     def __init__(self, cfg: AppConfig, store: SleepStore) -> None:
         self._cfg = cfg
         self._store = store
+        #: Fingerprints bereits gecoachter Reports (date, score, total_sleep) —
+        #: verhindert wiederholtes LLM-Coaching identischer Nächte im Dauerbetrieb.
+        self._coached: set[tuple[Any, Any, Any]] = set()
         self._influx = None
         if cfg.database.enabled:
             try:
@@ -118,8 +125,13 @@ class SleepPipeline:
 
         if not self._cfg.ml_pipeline.enabled:
             return
-        # Ein Report ergibt nur Sinn, wenn der Batch Schlafphasen enthält.
-        if not any(r.metric == METRIC_SLEEP_STAGE for r in readings):
+
+        # Ein Poll-Batch kann MEHRERE Nächte enthalten (der Fitbit-Adapter
+        # liefert je nach lookback_days mehrere Nächte auf einmal). Wir splitten
+        # daher an grossen Lücken in einzelne Nächte und bauen pro Nacht einen
+        # eigenen Report (Upsert nach date macht das idempotent).
+        nights = _split_into_nights(readings)
+        if not nights:
             logger.debug(
                 "[pipeline] %s: Batch ohne Schlafphasen (%d Vitalwerte) — "
                 "kein Report.",
@@ -130,26 +142,24 @@ class SleepPipeline:
 
         from ml_pipeline import build_report
 
-        report = await build_report(readings, source=source)
-        if report is None:
+        for night in nights:
+            report = await build_report(night, source=source)
+            if report is None:
+                continue
+            await self._store.save_report(report)
             logger.info(
-                "[pipeline] %s: kein Report erzeugt (zu wenig Schlafdaten).", source
+                "[pipeline] Report gespeichert: %s | Score %s · Effizienz %.0f%% · "
+                "Schlaf %.0f min · %d Phasen-Segmente",
+                report.get("date"),
+                report.get("sleep_score"),
+                float(report.get("sleep_efficiency_pct") or 0),
+                float(report.get("total_sleep_min") or 0),
+                len(report.get("hypnogram") or []),
             )
-            return
-
-        await self._store.save_report(report)
-        logger.info(
-            "[pipeline] Report gespeichert: %s | Score %s · Effizienz %.0f%% · "
-            "Schlaf %.0f min · %d Phasen-Segmente",
-            report.get("date"),
-            report.get("sleep_score"),
-            float(report.get("sleep_efficiency_pct") or 0),
-            float(report.get("total_sleep_min") or 0),
-            len(report.get("hypnogram") or []),
-        )
-
-        if self._cfg.llm_coach.enabled:
-            await self._run_coach(report)
+            # Coach nur bei wirklich neuem/geändertem Report anstossen — spart
+            # lokale LLM-Rechenzeit bei wiederholten Lookback-Polls im Dauerbetrieb.
+            if self._cfg.llm_coach.enabled and self._is_new_report(report):
+                await self._run_coach(report)
 
     async def _run_coach(self, report: dict) -> None:
         """Stößt den lokalen LLM-Coach an und loggt die erste Zeile (Whitebox)."""
@@ -165,6 +175,27 @@ class SleepPipeline:
         except Exception:  # noqa: BLE001 — Coaching ist optional, nie fatal
             logger.exception("[pipeline] Coaching fehlgeschlagen — übersprungen.")
 
+    def _is_new_report(self, report: dict) -> bool:
+        """
+        Prüft, ob dieser Report neu bzw. verändert ist (für Coach-Dedup).
+
+        Args:
+            report: Der gerade gebaute SleepReport.
+
+        Returns:
+            ``True`` beim ersten Mal für diesen (date, score, total_sleep)-
+            Fingerprint, danach ``False`` (bis sich die Nacht ändert).
+        """
+        fingerprint = (
+            report.get("date"),
+            report.get("sleep_score"),
+            report.get("total_sleep_min"),
+        )
+        if fingerprint in self._coached:
+            return False
+        self._coached.add(fingerprint)
+        return True
+
     async def aclose(self) -> None:
         """Schließt optionale Ressourcen der Pipeline (InfluxWriter)."""
         if self._influx is not None:
@@ -172,3 +203,50 @@ class SleepPipeline:
                 await self._influx.close()
             except Exception:  # noqa: BLE001
                 logger.exception("[pipeline] InfluxWriter-Schließen fehlgeschlagen.")
+
+
+def _split_into_nights(
+    readings: list[WearableReading],
+) -> list[list[WearableReading]]:
+    """
+    Teilt einen Poll-Batch anhand grosser Lücken in einzelne Nächte.
+
+    Ein Poll (z.B. beim Fitbit-Adapter mit ``lookback_days >= 2``) kann mehrere
+    Nächte enthalten. Diese Funktion clustert die Schlafphasen-Segmente an
+    Lücken von mehr als :data:`_NIGHT_GAP_S` Sekunden und ordnet jeder Nacht
+    alle Readings (Phasen + Vitalwerte) zu, deren Startzeit in ihr Zeitfenster
+    fällt.
+
+    Args:
+        readings: Die Messpunkte eines Poll-Batches.
+
+    Returns:
+        Liste von Reading-Gruppen (eine pro Nacht), chronologisch. Leer, wenn
+        keine Schlafphasen enthalten sind.
+    """
+    stages = sorted(
+        (r for r in readings if r.metric == METRIC_SLEEP_STAGE and r.end is not None),
+        key=lambda r: r.start,
+    )
+    if not stages:
+        return []
+
+    windows: list[list] = []  # [start, end] je Nacht
+    win_start = stages[0].start
+    win_end = stages[0].end
+    for seg in stages[1:]:
+        if (seg.start - win_end).total_seconds() > _NIGHT_GAP_S:
+            windows.append([win_start, win_end])
+            win_start, win_end = seg.start, seg.end
+        elif seg.end > win_end:
+            win_end = seg.end
+    windows.append([win_start, win_end])
+
+    if len(windows) == 1:
+        # Häufigster Fall (eine Nacht) — Batch unverändert zurückgeben.
+        return [readings]
+
+    groups: list[list[WearableReading]] = []
+    for win_start, win_end in windows:
+        groups.append([r for r in readings if win_start <= r.start <= win_end])
+    return groups

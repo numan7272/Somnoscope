@@ -131,7 +131,9 @@ ml_pipeline:
 # Lokaler LLM-Coach (optional — Phase 6)
 # ----------------------------------------------------------------------------
 llm_coach:
-  enabled: false
+  # An: zeigt die Coach-Karte im Dashboard. Ohne laufendes Ollama kommt eine
+  # regelbasierte deutsche Zusammenfassung (Graceful Fallback) — nie Cloud.
+  enabled: true
 
   # Backend: "ollama" oder "llama_cpp"
   backend: "ollama"
