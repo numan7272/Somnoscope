@@ -17,31 +17,55 @@
  *
  * Alles defensiv: fehlende Felder werden zu "–", nie zu Exceptions.
  * Keine externen Requests (Kernprinzip: Edge AI / offline).
+ *
+ * Zweisprachigkeit (DE/EN): alle sichtbaren Strings laufen über t() aus
+ * i18n.js, die Intl-Formatter über getLocale(). Beim Sprachwechsel wird die
+ * aktuelle Ansicht aus den zwischengespeicherten Daten neu gerendert —
+ * ohne erneutes Fetch. Der Coach-Text aus /api/coaching bleibt vorerst
+ * deutsch (der LLM-Prompt ist deutsch); nur die statische Coach-UI ist
+ * übersetzt.
  */
 "use strict";
 
 import { createTrendsView } from "./trends.js";
+import { t, getLang, setLang, initLang, getLocale, onLangChange } from "./i18n.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Phasen in Hypnogramm-Reihenfolge (oben = wach), Farben wie in style.css/scene.js. */
+/** Phasen in Hypnogramm-Reihenfolge (oben = wach), Farben wie in style.css/scene.js.
+ *  Labels sind i18n-Keys und werden erst beim Rendern über t() aufgelöst. */
 const STAGES = [
-  { key: "wake",  label: "Wach",        row: 0, color: "#e09a4a", ink: "#ecb277" },
-  { key: "rem",   label: "REM",         row: 1, color: "#b26ce0", ink: "#cf9ff0" },
-  { key: "light", label: "Leichtschlaf", row: 2, color: "#3fb8ae", ink: "#6fd3ca" },
-  { key: "deep",  label: "Tiefschlaf",  row: 3, color: "#5b6ee8", ink: "#9aa8ff" },
+  { key: "wake",  labelKey: "stage.wake",  row: 0, color: "#e09a4a", ink: "#ecb277" },
+  { key: "rem",   labelKey: "stage.rem",   row: 1, color: "#b26ce0", ink: "#cf9ff0" },
+  { key: "light", labelKey: "stage.light", row: 2, color: "#3fb8ae", ink: "#6fd3ca" },
+  { key: "deep",  labelKey: "stage.deep",  row: 3, color: "#5b6ee8", ink: "#9aa8ff" },
 ];
 const STAGE_BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ------------------------------------------------------------------------- *
- * Format-Helfer (deutschsprachig, defensiv)
+ * Format-Helfer (sprachabhängig via getLocale(), defensiv)
  * ------------------------------------------------------------------------- */
 
-const timeFmt = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
-const dateLongFmt = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
-const dateShortFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" });
+/** Intl-Formatter werden lazy je Sprache gebaut (Sprachwechsel = Neuaufbau). */
+let fmtLang = "";
+let timeFmt = null;
+let dateLongFmt = null;
+let dateShortFmt = null;
+
+function ensureFormatters() {
+  if (fmtLang === getLang() && timeFmt) return;
+  fmtLang = getLang();
+  const locale = getLocale();
+  timeFmt = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" });
+  dateLongFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" });
+  dateShortFmt = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" });
+}
+
+function fmtTime(d) { ensureFormatters(); return timeFmt.format(d); }
+function fmtDateLong(d) { ensureFormatters(); return dateLongFmt.format(d); }
+function fmtDateShort(d) { ensureFormatters(); return dateShortFmt.format(d); }
 
 function isNum(x) { return typeof x === "number" && Number.isFinite(x); }
 
@@ -53,7 +77,7 @@ function parseISO(iso) {
 
 function fmtClock(iso) {
   const d = parseISO(iso);
-  return d ? timeFmt.format(d) : "–";
+  return d ? fmtTime(d) : "–";
 }
 
 /** Minuten → "7 h 12 min" bzw. "42 min". */
@@ -67,14 +91,14 @@ function fmtMinutes(min) {
 }
 
 function fmtNum(x, digits = 0) {
-  return isNum(x) ? x.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits }) : "–";
+  return isNum(x) ? x.toLocaleString(getLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits }) : "–";
 }
 
-/** "YYYY-MM-DD" → "6. Juli 2026" (lokal, ohne TZ-Sprünge). */
+/** "YYYY-MM-DD" → "6. Juli 2026" bzw. "6 July 2026" (lokal, ohne TZ-Sprünge). */
 function fmtNightDate(dateStr) {
   if (typeof dateStr !== "string") return "";
   const d = parseISO(`${dateStr}T12:00:00`);
-  return d ? dateLongFmt.format(d) : dateStr;
+  return d ? fmtDateLong(d) : dateStr;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -141,36 +165,37 @@ function updateExportLinks() {
   if (!csv || !json) return;
 
   let query = "";
-  let scope = "Bis zu 365 Nächte";
+  let scope = t("export.scopeAll");
   if (currentView === "trends") {
     const pressed = el("range-picker")?.querySelector('button[aria-pressed="true"]');
     const days = Number(pressed?.dataset.days);
     if (Number.isFinite(days) && days > 0) {
       query = `?days=${days}`;
-      scope = `Die letzten ${days} Nächte`;
+      scope = t("export.scopeDays", { days });
     }
   }
   csv.href = `/api/export/reports.csv${query}`;
   json.href = `/api/export/reports.json${query}`;
-  csv.setAttribute("aria-label", `${scope} als CSV-Datei herunterladen`);
-  json.setAttribute("aria-label", `${scope} als JSON-Datei herunterladen`);
+  csv.setAttribute("aria-label", t("export.ariaCsv", { scope }));
+  json.setAttribute("aria-label", t("export.ariaJson", { scope }));
 }
 
 /* ------------------------------------------------------------------------- *
  * System-Ansicht: Status aus GET /api/status (App, Module, Adapter, Daten)
  * ------------------------------------------------------------------------- */
 
-/** Anzeige-Reihenfolge und deutsche Labels der Somnoscope-Module. */
+/** Anzeige-Reihenfolge der Somnoscope-Module; Labels/Notizen als i18n-Keys. */
 const SYSTEM_MODULES = [
-  { key: "wearable",        label: "Wearable",       note: "Schlafdaten-Quelle (BLE/Adapter)" },
-  { key: "climate_sensors", label: "Klimasensorik",  note: "CO₂, Temperatur, Luftfeuchte via MQTT" },
-  { key: "database",        label: "Datenbank",      note: "lokale Persistenz der Nächte" },
-  { key: "ml_pipeline",     label: "ML-Pipeline",    note: "Scoring und Phasen-Analyse" },
-  { key: "llm_coach",       label: "Schlaf-Coach",   note: "lokales Sprachmodell" },
+  { key: "wearable",        labelKey: "system.mod.wearable", noteKey: "system.mod.wearableNote" },
+  { key: "climate_sensors", labelKey: "system.mod.climate",  noteKey: "system.mod.climateNote" },
+  { key: "database",        labelKey: "system.mod.database", noteKey: "system.mod.databaseNote" },
+  { key: "ml_pipeline",     labelKey: "system.mod.ml",       noteKey: "system.mod.mlNote" },
+  { key: "llm_coach",       labelKey: "system.mod.coach",    noteKey: "system.mod.coachNote" },
 ];
 
 let systemLoaded = false;   // /api/status wird nur einmal (erfolgreich) geladen
 let systemLoading = false;  // Doppel-Klicks während des Ladens abfangen
+let lastSystemData = null;  // letzter Status-Payload — für Re-Render beim Sprachwechsel
 
 /** Schaltet die Unterzustände der System-Ansicht (Laden / Fehler / Inhalt). */
 function showSystemState(which) {
@@ -205,7 +230,7 @@ function renderSystemMeta(data) {
   const name = typeof data?.app?.name === "string" && data.app.name ? data.app.name : "Somnoscope";
   const version = typeof data?.app?.version === "string" && data.app.version ? data.app.version : "–";
   const tz = typeof data?.timezone === "string" && data.timezone ? data.timezone : "–";
-  el("system-meta").textContent = `${name} · Version ${version} · Zeitzone ${tz}`;
+  el("system-meta").textContent = t("system.meta", { name, version, tz });
 }
 
 /** Kapitel I: Modul-Status-Ledger (aktiv/inaktiv je Feature-Flag). */
@@ -215,9 +240,9 @@ function renderSystemModules(data) {
   const modules = data?.modules ?? {};
   for (const m of SYSTEM_MODULES) {
     list.append(statusRow({
-      label: m.label, note: m.note,
+      label: t(m.labelKey), note: t(m.noteKey),
       active: modules[m.key] === true,
-      onText: "aktiv", offText: "inaktiv",
+      onText: t("system.active"), offText: t("system.inactive"),
     }));
   }
 }
@@ -234,7 +259,7 @@ function renderSystemAdapters(data) {
     list.append(statusRow({
       label: a.type, note: "",
       active: a.enabled === true,
-      onText: "an", offText: "aus",
+      onText: t("system.on"), offText: t("system.off"),
       code: true,
     }));
   }
@@ -247,19 +272,19 @@ function renderSystemData(data) {
   const d = data?.data ?? {};
 
   const count = isNum(d.night_count) ? Math.max(0, Math.round(d.night_count)) : 0;
-  dl.append(ledgerRow("Erfasste Nächte", "im lokalen Archiv", fmtNum(count, 0)));
+  dl.append(ledgerRow(t("system.nightsRecorded"), t("system.nightsRecordedNote"), fmtNum(count, 0)));
 
   const from = typeof d.date_from === "string" ? parseISO(`${d.date_from}T12:00:00`) : null;
   const to = typeof d.date_to === "string" ? parseISO(`${d.date_to}T12:00:00`) : null;
-  const range = from && to ? `${dateShortFmt.format(from)} – ${dateShortFmt.format(to)}` : "–";
+  const range = from && to ? `${fmtDateShort(from)} – ${fmtDateShort(to)}` : "–";
   const rangeNote = from && to
-    ? `${fmtNightDate(d.date_from)} bis ${fmtNightDate(d.date_to)}`
-    : "noch keine Nächte erfasst";
-  dl.append(ledgerRow("Zeitraum", rangeNote, range));
+    ? t("common.fromToPlain", { from: fmtNightDate(d.date_from), to: fmtNightDate(d.date_to) })
+    : t("system.noNights");
+  dl.append(ledgerRow(t("system.range"), rangeNote, range));
 
   const score = isNum(d.latest_score) ? Math.round(d.latest_score) : null;
-  dl.append(ledgerRow("Letzter Score", "jüngste ausgewertete Nacht",
-    score === null ? "–" : fmtNum(score, 0), score === null ? "" : "von 100"));
+  dl.append(ledgerRow(t("system.lastScore"), t("system.lastScoreNote"),
+    score === null ? "–" : fmtNum(score, 0), score === null ? "" : t("system.of100")));
 }
 
 /**
@@ -290,6 +315,7 @@ async function showSystem() {
     renderSystemModules(data);
     renderSystemAdapters(data);
     renderSystemData(data);
+    lastSystemData = data; // für sprachliches Re-Render merken
     systemLoaded = true;
     showSystemState("body");
   } catch (err) {
@@ -304,21 +330,22 @@ async function showSystem() {
 
 function verdictFor(score) {
   if (!isNum(score)) return "";
-  if (score >= 85) return "Eine ausgezeichnete Nacht.";
-  if (score >= 70) return "Eine erholsame Nacht.";
-  if (score >= 55) return "Eine durchwachsene Nacht.";
-  if (score >= 40) return "Eine unruhige Nacht.";
-  return "Eine schwere Nacht.";
+  if (score >= 85) return t("verdict.excellent");
+  if (score >= 70) return t("verdict.good");
+  if (score >= 55) return t("verdict.mixed");
+  if (score >= 40) return t("verdict.restless");
+  return t("verdict.hard");
 }
 
-function renderScore(report) {
+function renderScore(report, animate = true) {
   const target = isNum(report.sleep_score) ? Math.round(report.sleep_score) : null;
   const valueEl = el("score-value");
   el("score-verdict").textContent = verdictFor(target);
 
   if (target === null) { valueEl.textContent = "–"; return; }
-  // Ohne Animation: reduzierte Bewegung oder Tab im Hintergrund (kein rAF).
-  if (REDUCED_MOTION || document.hidden) { valueEl.textContent = String(target); return; }
+  // Ohne Animation: Sprachwechsel-Re-Render, reduzierte Bewegung oder
+  // Tab im Hintergrund (kein rAF).
+  if (!animate || REDUCED_MOTION || document.hidden) { valueEl.textContent = String(target); return; }
 
   // Sanftes Hochzählen (ease-out), synchron zum Aufleuchten des Orbs.
   const dur = 1500;
@@ -356,7 +383,7 @@ function renderNightStrip(report) {
   const bar = el("strip-bar");
   bar.style.background = `linear-gradient(90deg, ${stops.join(", ")})`;
   bar.setAttribute("aria-label",
-    `Schlafphasen-Verlauf von ${fmtClock(report.sleep_onset)} bis ${fmtClock(report.final_wake)} Uhr`);
+    t("strip.aria", { from: fmtClock(report.sleep_onset), to: fmtClock(report.final_wake) }));
   el("strip-onset").textContent = fmtClock(report.sleep_onset);
   el("strip-wake").textContent = fmtClock(report.final_wake);
 }
@@ -414,7 +441,8 @@ function renderHypnogram(report) {
     rect.setAttribute("width", Math.max(w, 1.5)); rect.setAttribute("height", BAR_H);
     rect.setAttribute("fill", stage.color);
     const title = document.createElementNS(SVG_NS, "title");
-    title.textContent = `${stage.label}: ${fmtClock(seg.start)} bis ${fmtClock(seg.end)} Uhr`;
+    title.textContent = t("hypno.segTitle",
+      { stage: t(stage.labelKey), from: fmtClock(seg.start), to: fmtClock(seg.end) });
     rect.appendChild(title);
     svg.appendChild(rect);
     prev = { stage };
@@ -433,13 +461,12 @@ function renderHypnogram(report) {
     if (pct < 2 || pct > 98) continue;
     const span = document.createElement("span");
     span.style.left = `${pct.toFixed(2)}%`;
-    span.textContent = timeFmt.format(d);
+    span.textContent = fmtTime(d);
     ticks.appendChild(span);
   }
 
   el("hypno-caption").textContent =
-    `Hypnogramm der Nacht von ${fmtClock(report.sleep_onset)} bis ${fmtClock(report.final_wake)} Uhr. ` +
-    `Die Phasen-Bilanz in Minuten steht in der folgenden Liste.`;
+    t("hypno.caption", { from: fmtClock(report.sleep_onset), to: fmtClock(report.final_wake) });
 }
 
 function renderStageLedger(report) {
@@ -457,13 +484,13 @@ function renderStageLedger(report) {
     const dot = document.createElement("i");
     dot.style.background = stage.color;
     dot.setAttribute("aria-hidden", "true");
-    name.append(dot, stage.label);
+    name.append(dot, t(stage.labelKey));
     const val = document.createElement("span");
     val.className = "stage-min";
     val.textContent = fmtMinutes(mins[key]);
     const pct = document.createElement("span");
     pct.className = "stage-pct";
-    pct.textContent = isNum(pcts[key]) ? `${fmtNum(pcts[key], 0)} % der Nacht` : "–";
+    pct.textContent = isNum(pcts[key]) ? t("stages.pctOfNight", { pct: fmtNum(pcts[key], 0) }) : "–";
     li.append(name, val, pct);
     list.appendChild(li);
   }
@@ -497,13 +524,14 @@ function renderMetrics(report) {
   const dl = el("metrics-ledger");
   dl.textContent = "";
   dl.append(
-    ledgerRow("Gesamtschlaf", "tatsächlich geschlafen", fmtMinutes(report.total_sleep_min)),
-    ledgerRow("Zeit im Bett", `${fmtClock(report.sleep_onset)} bis ${fmtClock(report.final_wake)} Uhr`,
+    ledgerRow(t("metrics.totalSleep"), t("metrics.totalSleepNote"), fmtMinutes(report.total_sleep_min)),
+    ledgerRow(t("metrics.timeInBed"),
+      t("common.fromToClock", { from: fmtClock(report.sleep_onset), to: fmtClock(report.final_wake) }),
       fmtMinutes(report.time_in_bed_min)),
-    ledgerRow("Schlafeffizienz", "Schlafanteil der Bettzeit",
+    ledgerRow(t("metrics.efficiency"), t("metrics.efficiencyNote"),
       fmtNum(report.sleep_efficiency_pct, 0), "%"),
-    ledgerRow("Einschlaflatenz", "bis zur ersten Schlafphase", fmtMinutes(report.sleep_latency_min)),
-    ledgerRow("Wach nach dem Einschlafen", "WASO", fmtMinutes(report.waso_min)),
+    ledgerRow(t("metrics.latency"), t("metrics.latencyNote"), fmtMinutes(report.sleep_latency_min)),
+    ledgerRow(t("metrics.waso"), t("metrics.wasoNote"), fmtMinutes(report.waso_min)),
   );
 }
 
@@ -592,21 +620,21 @@ function renderVitals(report) {
 
   list.append(
     vitalItem({
-      label: "Puls", color: "#ef8fa3",
-      value: fmtNum(v.avg_hr, 0), unit: "bpm Ø",
-      sub: isNum(v.min_hr) ? `Tiefster Wert der Nacht: ${fmtNum(v.min_hr, 0)} bpm` : "",
+      label: t("vitals.hr"), color: "#ef8fa3",
+      value: fmtNum(v.avg_hr, 0), unit: t("vitals.hrUnit"),
+      sub: isNum(v.min_hr) ? t("vitals.hrSub", { v: fmtNum(v.min_hr, 0) }) : "",
       series: s.heart_rate,
     }),
     vitalItem({
-      label: "HRV", color: "#8fe3b0",
-      value: fmtNum(v.avg_hrv, 0), unit: "ms Ø",
-      sub: "Herzratenvariabilität, höher ist erholter",
+      label: t("vitals.hrv"), color: "#8fe3b0",
+      value: fmtNum(v.avg_hrv, 0), unit: t("vitals.hrvUnit"),
+      sub: t("vitals.hrvSub"),
       series: s.hrv,
     }),
     vitalItem({
-      label: "SpO₂", color: "#a9c8ff",
-      value: fmtNum(v.avg_spo2, 1), unit: "% Ø",
-      sub: "Sauerstoffsättigung im Blut",
+      label: t("vitals.spo2"), color: "#a9c8ff",
+      value: fmtNum(v.avg_spo2, 1), unit: t("vitals.spo2Unit"),
+      sub: t("vitals.spo2Sub"),
       series: s.spo2,
     }),
   );
@@ -616,8 +644,8 @@ function renderVitals(report) {
   if (tempVals.length) {
     const avg = tempVals.reduce((a, b) => a + b, 0) / tempVals.length;
     list.append(vitalItem({
-      label: "Hauttemperatur", color: "#e8c07a",
-      value: fmtNum(avg, 1), unit: "°C Ø",
+      label: t("vitals.temp"), color: "#e8c07a",
+      value: fmtNum(avg, 1), unit: t("vitals.tempUnit"),
       sub: "",
       series: s.skin_temp,
     }));
@@ -637,9 +665,9 @@ function renderClimate(report) {
 
   const dl = el("climate-ledger");
   dl.textContent = "";
-  if (isNum(c.avg_co2)) dl.append(ledgerRow("CO₂", "Durchschnitt im Schlafzimmer", fmtNum(c.avg_co2, 0), "ppm"));
-  if (isNum(c.avg_temp)) dl.append(ledgerRow("Raumtemperatur", "Durchschnitt", fmtNum(c.avg_temp, 1), "°C"));
-  if (isNum(c.avg_humidity)) dl.append(ledgerRow("Luftfeuchte", "Durchschnitt", fmtNum(c.avg_humidity, 0), "%"));
+  if (isNum(c.avg_co2)) dl.append(ledgerRow(t("climate.co2"), t("climate.co2Note"), fmtNum(c.avg_co2, 0), "ppm"));
+  if (isNum(c.avg_temp)) dl.append(ledgerRow(t("climate.temp"), t("climate.avgNote"), fmtNum(c.avg_temp, 1), "°C"));
+  if (isNum(c.avg_humidity)) dl.append(ledgerRow(t("climate.humidity"), t("climate.avgNote"), fmtNum(c.avg_humidity, 0), "%"));
 }
 
 /* ------------------------------------------------------------------------- *
@@ -657,15 +685,18 @@ function renderHistory(reports, current) {
 
   const strip = el("history-strip");
   strip.textContent = "";
-  strip.setAttribute("aria-label",
-    `Schlaf-Score der letzten ${rows.length} Nächte, von ${fmtNightDate(rows[0].date)} bis ${fmtNightDate(rows[rows.length - 1].date)}`);
+  strip.setAttribute("aria-label", t("history.aria", {
+    n: rows.length,
+    from: fmtNightDate(rows[0].date),
+    to: fmtNightDate(rows[rows.length - 1].date),
+  }));
 
   for (const r of rows) {
     const bar = document.createElement("div");
     bar.className = "bar";
     const score = Math.max(0, Math.min(100, Math.round(r.sleep_score)));
     bar.style.height = `${Math.max(6, score)}%`;
-    bar.title = `${fmtNightDate(r.date)}: Score ${score}`;
+    bar.title = t("history.barTitle", { date: fmtNightDate(r.date), score });
     if (current && r.date === current.date) {
       bar.classList.add("is-current");
       const lbl = document.createElement("span");
@@ -678,8 +709,8 @@ function renderHistory(reports, current) {
 
   const d0 = parseISO(`${rows[0].date}T12:00:00`);
   const d1 = parseISO(`${rows[rows.length - 1].date}T12:00:00`);
-  el("history-from").textContent = d0 ? dateShortFmt.format(d0) : "";
-  el("history-to").textContent = d1 ? dateShortFmt.format(d1) : "";
+  el("history-from").textContent = d0 ? fmtDateShort(d0) : "";
+  el("history-to").textContent = d1 ? fmtDateShort(d1) : "";
 }
 
 /* ------------------------------------------------------------------------- *
@@ -767,13 +798,15 @@ async function loadCoaching() {
  * ------------------------------------------------------------------------- */
 
 function renderFrame(report) {
-  el("night-date").textContent = report?.date ? `Nacht vom ${fmtNightDate(report.date)}` : "";
+  el("night-date").textContent = report?.date
+    ? t("frame.nightOf", { date: fmtNightDate(report.date) })
+    : "";
 
   const parts = [];
-  if (report?.source) parts.push(`Quelle: ${report.source}`);
+  if (report?.source) parts.push(t("frame.source", { source: report.source }));
   const gen = parseISO(report?.generated_at);
   if (gen) {
-    parts.push(`Auswertung vom ${dateLongFmt.format(gen)}, ${timeFmt.format(gen)} Uhr`);
+    parts.push(t("frame.generated", { date: fmtDateLong(gen), time: fmtTime(gen) }));
   }
   el("colophon-meta").textContent = parts.join(" · ");
 }
@@ -814,11 +847,12 @@ function makeTooltipHandler() {
     const head = document.createElement("span");
     head.className = "tt-stage";
     head.style.color = stage?.ink ?? "inherit";
-    head.textContent = stage?.label ?? segment.stage;
+    head.textContent = stage ? t(stage.labelKey) : segment.stage;
     const time = document.createElement("span");
     time.className = "tt-time";
     const dur = (parseISO(segment.end) - parseISO(segment.start)) / 6e4;
-    time.textContent = `${fmtClock(segment.start)} bis ${fmtClock(segment.end)} Uhr · ${fmtMinutes(dur)}`;
+    time.textContent =
+      `${t("common.fromToClock", { from: fmtClock(segment.start), to: fmtClock(segment.end) })} · ${fmtMinutes(dur)}`;
     tip.append(head, time);
     tip.style.left = `${Math.max(90, Math.min(window.innerWidth - 90, x))}px`;
     tip.style.top = `${Math.max(60, y)}px`;
@@ -878,6 +912,10 @@ async function fetchJSON(url) {
   return res.json();
 }
 
+/** Zuletzt geladener Report + Historie — für Re-Render beim Sprachwechsel. */
+let lastReport = null;
+let lastHistory = [];
+
 async function main() {
   showState("loading");
 
@@ -903,6 +941,9 @@ async function main() {
     bootScene(null);
     return;
   }
+
+  lastReport = report;
+  lastHistory = history;
 
   try {
     renderFrame(report);
@@ -934,6 +975,53 @@ el("nav-system").addEventListener("click", () => setView("system"));
 // Retry der System-Ansicht: lädt /api/status neu, ohne die Seite zu verlassen.
 el("system-retry").addEventListener("click", () => showSystem());
 
+/* ------------------------------------------------------------------------- *
+ * Sprach-Umschalter (DE/EN)
+ * ------------------------------------------------------------------------- */
+
+/** Hält die aria-pressed-Zustände der Sprach-Buttons synchron zur Sprache. */
+function syncLangButtons() {
+  el("lang-de")?.setAttribute("aria-pressed", getLang() === "de" ? "true" : "false");
+  el("lang-en")?.setAttribute("aria-pressed", getLang() === "en" ? "true" : "false");
+}
+
+el("lang-de").addEventListener("click", () => setLang("de"));
+el("lang-en").addEventListener("click", () => setLang("en"));
+
+// Sprachwechsel: die AKTUELLE Ansicht aus den zwischengespeicherten Daten neu
+// zeichnen — ohne erneutes Fetch. Die statischen Texte hat setLang() bereits
+// via applyStatic() übersetzt; die Verlauf-Ansicht registriert ihren eigenen
+// Callback in trends.js. Der Coach-Text bleibt bewusst deutsch (LLM-Prompt).
+onLangChange(() => {
+  syncLangButtons();
+  if (lastReport) {
+    try {
+      renderFrame(lastReport);
+      renderScore(lastReport, false); // Zahl steht schon — nicht erneut hochzählen
+      renderNightStrip(lastReport);
+      renderHypnogram(lastReport);
+      renderStageLedger(lastReport);
+      renderMetrics(lastReport);
+      renderVitals(lastReport);
+      renderClimate(lastReport);
+      renderHistory(lastHistory, lastReport);
+    } catch (err) {
+      console.error("Somnoscope: Rendering-Fehler beim Sprachwechsel.", err);
+    }
+  }
+  if (lastSystemData) {
+    try {
+      renderSystemMeta(lastSystemData);
+      renderSystemModules(lastSystemData);
+      renderSystemAdapters(lastSystemData);
+      renderSystemData(lastSystemData);
+    } catch (err) {
+      console.error("Somnoscope: System-Rendering-Fehler beim Sprachwechsel.", err);
+    }
+  }
+  updateExportLinks();
+});
+
 // Zeitraum-Wechsel im Verlauf: Export-Links nachziehen. Der Listener ist
 // bewusst NACH createTrendsView() registriert — trends.js aktualisiert
 // aria-pressed synchron, bevor dieser Handler den Zustand ausliest.
@@ -960,6 +1048,10 @@ function registerServiceWorker() {
   }
 }
 
+// Sprache VOR dem ersten Rendern festlegen (localStorage/Browser-Sprache):
+// initLang() setzt <html lang> und übersetzt die statischen Texte.
+initLang();
+syncLangButtons();
 updateExportLinks();
 main();
 // Nach dem Start der App leise registrieren — blockiert nichts.

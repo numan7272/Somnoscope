@@ -19,17 +19,25 @@
  * Defensiv: fehlende Werte werden zu "–" bzw. Lücken in den Linien,
  * nie zu Exceptions. Bei weniger als zwei Nächten erscheint der
  * Empty-State ("Noch zu wenig Historie …").
+ *
+ * Zweisprachigkeit (DE/EN): alle sichtbaren Strings laufen über t() aus
+ * i18n.js, die Intl-Formatter über getLocale(). Beim Sprachwechsel wird
+ * die Ansicht aus dem zwischengespeicherten Trend-Payload neu gezeichnet
+ * (onLangChange) — ohne erneutes Fetch.
  */
 "use strict";
 
+import { t, getLang, getLocale, onLangChange } from "./i18n.js";
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Phasen in Stapel-Reihenfolge (unten = Tiefschlaf), Farben wie style.css. */
+/** Phasen in Stapel-Reihenfolge (unten = Tiefschlaf), Farben wie style.css.
+ *  Labels sind i18n-Keys und werden erst beim Rendern über t() aufgelöst. */
 const STACK_STAGES = [
-  { key: "deep",  label: "Tiefschlaf",   color: "#5b6ee8", ink: "#9aa8ff" },
-  { key: "light", label: "Leichtschlaf", color: "#3fb8ae", ink: "#6fd3ca" },
-  { key: "rem",   label: "REM",          color: "#b26ce0", ink: "#cf9ff0" },
-  { key: "wake",  label: "Wach",         color: "#e09a4a", ink: "#ecb277" },
+  { key: "deep",  labelKey: "stage.deep",  color: "#5b6ee8", ink: "#9aa8ff" },
+  { key: "light", labelKey: "stage.light", color: "#3fb8ae", ink: "#6fd3ca" },
+  { key: "rem",   labelKey: "stage.rem",   color: "#b26ce0", ink: "#cf9ff0" },
+  { key: "wake",  labelKey: "stage.wake",  color: "#e09a4a", ink: "#ecb277" },
 ];
 
 /** Linienfarben: Score = Mondlicht, Effizienz = Teal, HRV = Vital-Grün. */
@@ -38,11 +46,21 @@ const COLOR_EFF = "#3fb8ae";
 const COLOR_HRV = "#8fe3b0";
 
 /* ------------------------------------------------------------------------- *
- * Format-Helfer (deutschsprachig, defensiv)
+ * Format-Helfer (sprachabhängig via getLocale(), defensiv)
  * ------------------------------------------------------------------------- */
 
-const dateLongFmt = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
-const dateShortFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" });
+/** Intl-Formatter werden lazy je Sprache gebaut (Sprachwechsel = Neuaufbau). */
+let fmtLang = "";
+let dateLongFmt = null;
+let dateShortFmt = null;
+
+function ensureFormatters() {
+  if (fmtLang === getLang() && dateLongFmt) return;
+  fmtLang = getLang();
+  const locale = getLocale();
+  dateLongFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" });
+  dateShortFmt = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" });
+}
 
 function isNum(x) { return typeof x === "number" && Number.isFinite(x); }
 
@@ -54,17 +72,19 @@ function parseDay(dateStr) {
 
 function fmtDayLong(dateStr) {
   const d = parseDay(dateStr);
+  ensureFormatters();
   return d ? dateLongFmt.format(d) : (dateStr ?? "–");
 }
 
 function fmtDayShort(dateStr) {
   const d = parseDay(dateStr);
+  ensureFormatters();
   return d ? dateShortFmt.format(d) : "";
 }
 
 function fmtNum(x, digits = 0) {
   return isNum(x)
-    ? x.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits })
+    ? x.toLocaleString(getLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
     : "–";
 }
 
@@ -138,7 +158,7 @@ function renderLineChart(mount, { dates, values, color, height, unit = "", decim
   if (points.length < 2) {
     const hint = document.createElement("p");
     hint.className = "tchart-hint";
-    hint.textContent = "Für diesen Zeitraum liegen zu wenige Werte vor.";
+    hint.textContent = t("trends.tooFew");
     mount.appendChild(hint);
     return;
   }
@@ -247,7 +267,7 @@ function renderStagesChart(mount, dates, stacks) {
   if (n < 2) {
     const hint = document.createElement("p");
     hint.className = "tchart-hint";
-    hint.textContent = "Für diesen Zeitraum liegen zu wenige Werte vor.";
+    hint.textContent = t("trends.tooFew");
     mount.appendChild(hint);
     return;
   }
@@ -280,7 +300,7 @@ function renderStagesChart(mount, dates, stacks) {
     const titleParts = [];
     for (const stage of STACK_STAGES) {
       const pct = isNum(stages[stage.key]) ? Math.max(0, stages[stage.key]) : 0;
-      titleParts.push(`${stage.label} ${fmtNum(pct, 0)} %`);
+      titleParts.push(`${t(stage.labelKey)} ${t("common.pct", { pct: fmtNum(pct, 0) })}`);
       const hgt = (Math.min(100, pct) / 100) * ih;
       if (hgt <= 0) continue;
       const rect = svgEl("rect", {
@@ -346,10 +366,10 @@ function renderStats(averages) {
   list.textContent = "";
   const avg = averages && typeof averages === "object" ? averages : {};
   list.append(
-    statItem("Ø Schlaf-Score", fmtNum(avg.sleep_score, 0), "", "von 100 Punkten"),
-    statItem("Ø Effizienz", fmtNum(avg.sleep_efficiency_pct, 0), "%", "Schlafanteil der Bettzeit"),
-    statItem("Ø Schlafdauer", fmtMinutes(avg.total_sleep_min), "", "pro Nacht"),
-    statItem("Ø HRV", fmtNum(avg.avg_hrv, 0), "ms", "Herzratenvariabilität"),
+    statItem(t("trends.statScore"), fmtNum(avg.sleep_score, 0), "", t("trends.statScoreNote")),
+    statItem(t("trends.statEff"), fmtNum(avg.sleep_efficiency_pct, 0), "%", t("metrics.efficiencyNote")),
+    statItem(t("trends.statDur"), fmtMinutes(avg.total_sleep_min), "", t("trends.statDurNote")),
+    statItem(t("trends.statHrv"), fmtNum(avg.avg_hrv, 0), "ms", t("trends.statHrvNote")),
   );
 }
 
@@ -364,10 +384,10 @@ function renderLegend(distribution) {
     dot.style.background = stage.color;
     dot.setAttribute("aria-hidden", "true");
     const name = document.createElement("span");
-    name.textContent = stage.label;
+    name.textContent = t(stage.labelKey);
     const pct = document.createElement("span");
     pct.className = "legend-pct";
-    pct.textContent = isNum(dist[stage.key]) ? `Ø ${fmtNum(dist[stage.key], 0)} %` : "–";
+    pct.textContent = isNum(dist[stage.key]) ? t("trends.legendPct", { pct: fmtNum(dist[stage.key], 0) }) : "–";
     li.append(dot, name, pct);
     list.appendChild(li);
   }
@@ -410,19 +430,19 @@ function renderLedger(data) {
 
   dl.append(
     ledgerRow(
-      "Beste Nacht", "höchster Score im Zeitraum",
+      t("trends.best"), t("trends.bestNote"),
       best && isNum(best.sleep_score) ? fmtNum(best.sleep_score, 0) : "–",
-      best ? "Punkte" : "", best?.date,
+      best ? t("trends.points") : "", best?.date,
     ),
     ledgerRow(
-      "Schwächste Nacht", "niedrigster Score im Zeitraum",
+      t("trends.worst"), t("trends.worstNote"),
       worst && isNum(worst.sleep_score) ? fmtNum(worst.sleep_score, 0) : "–",
-      worst ? "Punkte" : "", worst?.date,
+      worst ? t("trends.points") : "", worst?.date,
     ),
     ledgerRow(
-      "Konsistenz", "Streuung des Scores — kleiner ist gleichmäßiger",
+      t("trends.consistency"), t("trends.consistencyNote"),
       stddev !== null ? `± ${fmtNum(stddev, 1)}` : "–",
-      stddev !== null ? "Punkte" : "",
+      stddev !== null ? t("trends.points") : "",
     ),
   );
 }
@@ -465,8 +485,10 @@ function renderCharts(data) {
 function describeRange(data) {
   const from = data.range?.from, to = data.range?.to;
   const n = data.n_nights;
-  const nights = `${fmtNum(n, 0)} ${n === 1 ? "Nacht" : "Nächte"}`;
-  if (from && to) return `${nights} · ${fmtDayLong(from)} bis ${fmtDayLong(to)}`;
+  const nights = `${fmtNum(n, 0)} ${n === 1 ? t("trends.nightOne") : t("trends.nightsMany")}`;
+  if (from && to) {
+    return `${nights} · ${t("common.fromToPlain", { from: fmtDayLong(from), to: fmtDayLong(to) })}`;
+  }
   return nights;
 }
 
@@ -475,27 +497,30 @@ function setCaptions(data) {
   const scoreVals = s.score.filter(isNum);
   const range = describeRange(data);
   el("chart-score-caption").textContent = scoreVals.length
-    ? `Schlaf-Score über ${range}: zwischen ${fmtNum(Math.min(...scoreVals), 0)} und ` +
-      `${fmtNum(Math.max(...scoreVals), 0)} Punkten, zuletzt ${fmtNum(scoreVals[scoreVals.length - 1], 0)}.`
-    : "Keine Score-Werte im Zeitraum.";
-  el("chart-stages-caption").textContent =
-    "Anteil der Schlafphasen je Nacht in Prozent; die Durchschnittswerte stehen in der Legende darunter.";
+    ? t("trends.capScore", {
+        range,
+        min: fmtNum(Math.min(...scoreVals), 0),
+        max: fmtNum(Math.max(...scoreVals), 0),
+        last: fmtNum(scoreVals[scoreVals.length - 1], 0),
+      })
+    : t("trends.capScoreEmpty");
+  el("chart-stages-caption").textContent = t("trends.capStages");
   el("chart-eff-caption").textContent =
-    `Schlafeffizienz je Nacht in Prozent, Durchschnitt ${fmtNum(data.averages?.sleep_efficiency_pct, 0)} %.`;
+    t("trends.capEff", { avg: fmtNum(data.averages?.sleep_efficiency_pct, 0) });
   el("chart-hrv-caption").textContent =
-    `Herzratenvariabilität je Nacht in Millisekunden, Durchschnitt ${fmtNum(data.averages?.avg_hrv, 0)} ms.`;
+    t("trends.capHrv", { avg: fmtNum(data.averages?.avg_hrv, 0) });
 
-  el("chart-score").setAttribute("aria-label", `Liniendiagramm: Schlaf-Score über ${range}`);
-  el("chart-stages").setAttribute("aria-label", `Gestapeltes Balkendiagramm: Schlafphasen je Nacht über ${range}`);
-  el("chart-eff").setAttribute("aria-label", `Liniendiagramm: Schlafeffizienz über ${range}`);
-  el("chart-hrv").setAttribute("aria-label", `Liniendiagramm: HRV über ${range}`);
+  el("chart-score").setAttribute("aria-label", t("trends.ariaScore", { range }));
+  el("chart-stages").setAttribute("aria-label", t("trends.ariaStages", { range }));
+  el("chart-eff").setAttribute("aria-label", t("trends.ariaEff", { range }));
+  el("chart-hrv").setAttribute("aria-label", t("trends.ariaHrv", { range }));
 
   el("avg-eff").textContent = "";
-  el("avg-eff").append(`Ø ${fmtNum(data.averages?.sleep_efficiency_pct, 0)}`);
+  el("avg-eff").append(`${t("common.avg")} ${fmtNum(data.averages?.sleep_efficiency_pct, 0)}`);
   const effUnit = document.createElement("small"); effUnit.textContent = "%";
   el("avg-eff").appendChild(effUnit);
   el("avg-hrv").textContent = "";
-  el("avg-hrv").append(`Ø ${fmtNum(data.averages?.avg_hrv, 0)}`);
+  el("avg-hrv").append(`${t("common.avg")} ${fmtNum(data.averages?.avg_hrv, 0)}`);
   const hrvUnit = document.createElement("small"); hrvUnit.textContent = "ms";
   el("avg-hrv").appendChild(hrvUnit);
 }
@@ -607,6 +632,23 @@ export function createTrendsView() {
     new ResizeObserver(rerenderOnResize).observe(el("trends"));
   }
   window.addEventListener("resize", rerenderOnResize);
+
+  // Sprachwechsel: Ansicht aus dem zwischengespeicherten Payload neu zeichnen
+  // (kein Neu-Fetch). Laden-/Leer-/Fehlerzustände sind statisch und werden
+  // bereits von applyStatic() in i18n.js übersetzt.
+  onLangChange(() => {
+    if (!lastData || !isNum(lastData.n_nights) || lastData.n_nights < 2) return;
+    try {
+      el("trends-range").textContent = describeRange(lastData);
+      renderStats(lastData.averages);
+      renderLegend(lastData.stage_distribution_pct);
+      renderLedger(lastData);
+      paintCharts(lastData);
+      setCaptions(lastData);
+    } catch (err) {
+      console.error("Somnoscope: Verlauf-Rendering-Fehler beim Sprachwechsel.", err);
+    }
+  });
 
   return {
     /** Zeigt die Ansicht an; lädt lazy bzw. passt die Charts der Breite an. */

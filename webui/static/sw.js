@@ -14,16 +14,17 @@
  */
 "use strict";
 
-/** Versionierter Cache-Name — bei Shell-Aenderungen hochzaehlen.
- *  Zusaetzlich revalidiert shellCacheFirst im Hintergrund (stale-while-
- *  revalidate), sodass Aenderungen Bestandsclients auch ohne Bump erreichen. */
-const CACHE_NAME = "somnoscope-shell-v2";
+/** Versionierter Cache-Name — bei Shell-Aenderungen hochzaehlen (neue Assets
+ *  erfordern einen Bump, damit activate sie sicher praecacht; stale-while-
+ *  revalidate aktualisiert nur bereits gecachte Keys). */
+const CACHE_NAME = "somnoscope-shell-v3";
 
 /** Die App-Shell: alles, was das Dashboard-Geruest offline braucht. */
 const SHELL_ASSETS = [
   "/",
   "/static/style.css",
   "/static/app.js",
+  "/static/i18n.js",
   "/static/scene.js",
   "/static/trends.js",
   "/static/vendor/three.module.min.js",

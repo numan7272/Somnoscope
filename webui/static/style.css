@@ -257,6 +257,36 @@ body.no-webgl .orb-anchor::before {
   background: rgba(239, 233, 218, 0.08);
 }
 
+/* Sprach-Umschalter DE/EN: gleiche stille Pill-Sprache wie der Ansichten-
+   Umschalter — Hairline-Rahmen, Mondlicht für die aktive Sprache. */
+.lang-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  align-self: center;
+}
+
+.lang-switch button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  cursor: pointer;
+  transition: color 0.2s ease-out, background-color 0.2s ease-out;
+}
+.lang-switch button:hover { color: var(--dim); }
+.lang-switch button[aria-pressed="true"] {
+  color: var(--lunar);
+  background: rgba(239, 233, 218, 0.08);
+}
+
 /* --- Zustände (Laden / Leer / Fehler) ------------------------------------ */
 
 .state {
@@ -927,6 +957,8 @@ body.no-webgl .orb-anchor::before {
   .masthead { flex-wrap: wrap; gap: 8px 14px; }
   .masthead-date { flex-basis: 100%; margin-left: 0; text-align: left; }
   .view-nav { margin-left: 0; flex-basis: 100%; align-self: flex-start; width: fit-content; }
+  /* Sprach-Umschalter mobil neben/unter dem Ansichten-Umschalter, linksbündig. */
+  .lang-switch { align-self: flex-start; }
 
   .orb-anchor    { height: clamp(220px, 34vh, 320px); }
   .band-anchor   { height: clamp(200px, 30vh, 300px); }
@@ -1164,7 +1196,9 @@ body.no-webgl .orb-anchor::before {
 }
 
 @media (max-width: 760px) {
-  #trends { padding-top: clamp(118px, 20vh, 170px); }
+  /* Mehr Kopfabstand: der Masthead hat mobil eine zusaetzliche Zeile
+     (Sprach-Umschalter) unter dem Ansichten-Umschalter. */
+  #trends { padding-top: clamp(150px, 25vh, 205px); }
   .trend-stats { grid-template-columns: 1fr 1fr; gap: 18px clamp(14px, 5vw, 28px); }
   .trend-duo { grid-template-columns: 1fr; }
   .range-picker { width: 100%; justify-content: space-between; }
@@ -1275,6 +1309,7 @@ body.no-webgl .orb-anchor::before {
 }
 
 @media (max-width: 760px) {
-  /* Masthead bricht mobil um (Umschalter in eigener Zeile) → mehr Kopf-Raum. */
-  #system { padding-top: clamp(118px, 20vh, 170px); }
+  /* Masthead bricht mobil um (Ansichten- + Sprach-Umschalter je eigene Zeile)
+     → mehr Kopf-Raum, damit die Sprach-Pille die Ueberschrift nicht ueberlappt. */
+  #system { padding-top: clamp(150px, 25vh, 205px); }
 }

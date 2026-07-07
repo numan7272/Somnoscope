@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="description" content="Somnoscope, das lokale Schlaf-Observatorium: die letzte Nacht als Nachthimmel, Hypnogramm und Vitalwerte. 100 % offline.">
-  <title>Somnoscope · Schlaf-Observatorium</title>
+  <!-- Statische Texte tragen data-i18n/data-i18n-aria; der deutsche Text im Markup bleibt als Fallback ohne JS. -->
+  <title data-i18n="app.title">Somnoscope · Schlaf-Observatorium</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E">
   <!-- PWA: installierbar & offline-faehig — alles lokal, keine externen Assets. -->
   <link rel="manifest" href="/manifest.webmanifest">
@@ -23,7 +24,7 @@
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <a class="skip-link" href="#main" data-i18n="skip">Zum Inhalt springen</a>
 
   <!-- 3D-Nachthimmel: rein dekorativ, alle Daten stehen parallel im DOM. -->
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -31,12 +32,19 @@
   <div class="page">
     <header class="masthead">
       <p class="wordmark">Somnoscope</p>
-      <p class="masthead-role">Schlaf&#8202;·&#8202;Observatorium</p>
-      <nav class="view-nav" aria-label="Ansicht wechseln">
-        <button type="button" id="nav-night" aria-pressed="true">Diese Nacht</button>
-        <button type="button" id="nav-trends" aria-pressed="false">Verlauf</button>
-        <button type="button" id="nav-system" aria-pressed="false">System</button>
+      <p class="masthead-role" data-i18n="masthead.role">Schlaf&#8202;·&#8202;Observatorium</p>
+      <nav class="view-nav" aria-label="Ansicht wechseln" data-i18n-aria="nav.aria">
+        <button type="button" id="nav-night" aria-pressed="true" data-i18n="nav.night">Diese Nacht</button>
+        <button type="button" id="nav-trends" aria-pressed="false" data-i18n="nav.trends">Verlauf</button>
+        <button type="button" id="nav-system" aria-pressed="false" data-i18n="nav.system">System</button>
       </nav>
+      <!-- Sprach-Umschalter DE/EN: gleiche Pill-Sprache wie der Ansichten-Umschalter. -->
+      <div class="lang-switch" role="group" aria-label="Sprache wählen" data-i18n-aria="lang.aria">
+        <button type="button" id="lang-de" lang="de" aria-pressed="true"
+                aria-label="Deutsch">DE</button>
+        <button type="button" id="lang-en" lang="en" aria-pressed="false"
+                aria-label="English">EN</button>
+      </div>
       <p class="masthead-date" id="night-date"></p>
     </header>
 
@@ -45,25 +53,25 @@
       <!-- Ladezustand -->
       <section id="state-loading" class="state" aria-live="polite">
         <div class="state-moon" aria-hidden="true"></div>
-        <p class="state-msg">Die Nacht wird geladen&nbsp;…</p>
+        <p class="state-msg" data-i18n="night.loading">Die Nacht wird geladen&nbsp;…</p>
       </section>
 
       <!-- Leeransicht: noch keine Daten -->
       <section id="state-empty" class="state" hidden aria-labelledby="empty-title">
         <div class="state-moon" aria-hidden="true"></div>
-        <h1 id="empty-title" class="state-title">Noch keine Schlafdaten</h1>
+        <h1 id="empty-title" class="state-title" data-i18n="night.emptyTitle">Noch keine Schlafdaten</h1>
         <p class="state-msg">
-          Das Observatorium ist bereit, aber der Himmel ist noch leer.<br>
-          Starte <code>python main.py</code>, um eine Nacht zu erfassen.
+          <span data-i18n="night.emptyMsg1">Das Observatorium ist bereit, aber der Himmel ist noch leer.</span><br>
+          <span data-i18n="night.emptyMsg2a">Starte </span><code>python main.py</code><span data-i18n="night.emptyMsg2b">, um eine Nacht zu erfassen.</span>
         </p>
       </section>
 
       <!-- Fehlerzustand -->
       <section id="state-error" class="state" hidden aria-labelledby="error-title">
         <div class="state-moon" aria-hidden="true"></div>
-        <h1 id="error-title" class="state-title">Verbindung unterbrochen</h1>
-        <p class="state-msg">Die Schlafdaten konnten nicht geladen werden.</p>
-        <button type="button" id="retry-btn" class="retry">Erneut versuchen</button>
+        <h1 id="error-title" class="state-title" data-i18n="common.errorTitle">Verbindung unterbrochen</h1>
+        <p class="state-msg" data-i18n="night.errorMsg">Die Schlafdaten konnten nicht geladen werden.</p>
+        <button type="button" id="retry-btn" class="retry" data-i18n="common.retry">Erneut versuchen</button>
       </section>
 
       <!-- Report-Ansicht -->
@@ -74,13 +82,13 @@
           <div class="scene-anchor orb-anchor" data-anchor="orb" aria-hidden="true"></div>
           <div class="score enter">
             <p class="score-value"><span id="score-value">–</span></p>
-            <p class="score-label" id="score-label">Schlaf-Score</p>
+            <p class="score-label" id="score-label" data-i18n="score.label">Schlaf-Score</p>
             <p class="score-verdict" id="score-verdict"></p>
           </div>
           <div class="night-strip enter" id="night-strip">
             <div class="strip-times">
               <span id="strip-onset" class="strip-time"></span>
-              <span class="strip-caption">Verlauf der Nacht</span>
+              <span class="strip-caption" data-i18n="strip.caption">Verlauf der Nacht</span>
               <span id="strip-wake" class="strip-time"></span>
             </div>
             <div class="strip-bar" id="strip-bar" role="img" aria-label=""></div>
@@ -91,13 +99,13 @@
         <section class="chapter" aria-labelledby="h-verlauf">
           <header class="chapter-head">
             <span class="chapter-no" aria-hidden="true">I</span>
-            <h2 id="h-verlauf">Die Nacht im Verlauf</h2>
+            <h2 id="h-verlauf" data-i18n="chapter.night">Die Nacht im Verlauf</h2>
           </header>
           <div class="scene-anchor band-anchor" data-anchor="band" aria-hidden="true"></div>
           <figure class="hypnogram">
             <div class="hypno-frame">
               <div class="hypno-rows" aria-hidden="true">
-                <span>Wach</span><span>REM</span><span>Leicht</span><span>Tief</span>
+                <span data-i18n="hypno.rowWake">Wach</span><span data-i18n="hypno.rowRem">REM</span><span data-i18n="hypno.rowLight">Leicht</span><span data-i18n="hypno.rowDeep">Tief</span>
               </div>
               <svg id="hypno-svg" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
             </div>
@@ -111,7 +119,7 @@
         <section class="chapter" aria-labelledby="h-kennzahlen">
           <header class="chapter-head">
             <span class="chapter-no" aria-hidden="true">II</span>
-            <h2 id="h-kennzahlen">Kennzahlen</h2>
+            <h2 id="h-kennzahlen" data-i18n="chapter.metrics">Kennzahlen</h2>
           </header>
           <dl class="ledger" id="metrics-ledger"></dl>
         </section>
@@ -120,7 +128,7 @@
         <section class="chapter" id="vitals-section" aria-labelledby="h-vitals">
           <header class="chapter-head">
             <span class="chapter-no" aria-hidden="true">III</span>
-            <h2 id="h-vitals">Vitalwerte</h2>
+            <h2 id="h-vitals" data-i18n="chapter.vitals">Vitalwerte</h2>
           </header>
           <div class="scene-anchor vitals-anchor" data-anchor="vitals" aria-hidden="true"></div>
           <ul class="vitals" id="vitals-list"></ul>
@@ -130,7 +138,7 @@
         <section class="chapter" id="climate-section" hidden aria-labelledby="h-klima">
           <header class="chapter-head">
             <span class="chapter-no" aria-hidden="true">IV</span>
-            <h2 id="h-klima">Schlafklima</h2>
+            <h2 id="h-klima" data-i18n="chapter.climate">Schlafklima</h2>
           </header>
           <dl class="ledger" id="climate-ledger"></dl>
         </section>
@@ -139,7 +147,7 @@
         <section class="chapter" id="history-section" hidden aria-labelledby="h-history">
           <header class="chapter-head">
             <span class="chapter-no" aria-hidden="true">V</span>
-            <h2 id="h-history">Letzte Nächte</h2>
+            <h2 id="h-history" data-i18n="chapter.history">Letzte Nächte</h2>
           </header>
           <div class="history" id="history-strip" role="img" aria-label=""></div>
           <div class="history-dates" aria-hidden="true">
@@ -147,18 +155,20 @@
           </div>
         </section>
 
-        <!-- VI · Schlaf-Coach (lokales LLM; erscheint erst nach der Analyse) -->
+        <!-- VI · Schlaf-Coach (lokales LLM; erscheint erst nach der Analyse).
+             Hinweis: Der generierte Coach-Text bleibt vorerst deutsch (LLM-Prompt
+             ist deutsch) — nur die statische Coach-UI ist übersetzt. -->
         <section class="chapter" id="coach-section" hidden aria-labelledby="h-coach">
           <header class="chapter-head">
             <span class="chapter-no" aria-hidden="true">VI</span>
-            <h2 id="h-coach">Schlaf-Coach</h2>
+            <h2 id="h-coach" data-i18n="chapter.coach">Schlaf-Coach</h2>
           </header>
           <article class="coach-card" aria-live="polite" aria-busy="true"
-                   aria-label="Coaching-Empfehlung des lokalen Schlaf-Coach">
+                   aria-label="Coaching-Empfehlung des lokalen Schlaf-Coach" data-i18n-aria="coach.cardAria">
             <span class="coach-spectrum" aria-hidden="true"></span>
-            <p class="coach-status" id="coach-status">Analysiere deine Nacht&nbsp;…</p>
+            <p class="coach-status" id="coach-status" data-i18n="coach.status">Analysiere deine Nacht&nbsp;…</p>
             <div class="coach-text" id="coach-text"></div>
-            <p class="coach-note">Vom lokalen Modell verfasst — deine Daten verlassen dieses Gerät nicht.</p>
+            <p class="coach-note" data-i18n="coach.note">Vom lokalen Modell verfasst — deine Daten verlassen dieses Gerät nicht.</p>
           </article>
         </section>
 
@@ -169,35 +179,35 @@
 
         <header class="trends-head">
           <div class="trends-title-block">
-            <h1 class="trends-title">Verlauf</h1>
+            <h1 class="trends-title" data-i18n="trends.title">Verlauf</h1>
             <p class="trends-range" id="trends-range"></p>
           </div>
-          <div class="range-picker" role="group" aria-label="Zeitraum wählen" id="range-picker">
-            <button type="button" data-days="7"  aria-pressed="false">7&nbsp;Nächte</button>
-            <button type="button" data-days="14" aria-pressed="false">14&nbsp;Nächte</button>
-            <button type="button" data-days="30" aria-pressed="true">30&nbsp;Nächte</button>
+          <div class="range-picker" role="group" aria-label="Zeitraum wählen" data-i18n-aria="trends.rangeAria" id="range-picker">
+            <button type="button" data-days="7"  aria-pressed="false" data-i18n="trends.nights7">7&nbsp;Nächte</button>
+            <button type="button" data-days="14" aria-pressed="false" data-i18n="trends.nights14">14&nbsp;Nächte</button>
+            <button type="button" data-days="30" aria-pressed="true" data-i18n="trends.nights30">30&nbsp;Nächte</button>
           </div>
         </header>
 
         <!-- Ladezustand -->
         <section id="trends-loading" class="state state-sub" aria-live="polite">
           <div class="state-moon" aria-hidden="true"></div>
-          <p class="state-msg">Der Verlauf wird geladen&nbsp;…</p>
+          <p class="state-msg" data-i18n="trends.loading">Der Verlauf wird geladen&nbsp;…</p>
         </section>
 
         <!-- Leeransicht: weniger als zwei Nächte -->
         <section id="trends-empty" class="state state-sub" hidden aria-labelledby="trends-empty-title">
           <div class="state-moon" aria-hidden="true"></div>
-          <h2 id="trends-empty-title" class="state-title">Noch zu wenig Historie</h2>
-          <p class="state-msg">Noch zu wenig Historie — erfasse mehr Nächte.</p>
+          <h2 id="trends-empty-title" class="state-title" data-i18n="trends.emptyTitle">Noch zu wenig Historie</h2>
+          <p class="state-msg" data-i18n="trends.emptyMsg">Noch zu wenig Historie — erfasse mehr Nächte.</p>
         </section>
 
         <!-- Fehlerzustand -->
         <section id="trends-error" class="state state-sub" hidden aria-labelledby="trends-error-title">
           <div class="state-moon" aria-hidden="true"></div>
-          <h2 id="trends-error-title" class="state-title">Verbindung unterbrochen</h2>
-          <p class="state-msg">Der Verlauf konnte nicht geladen werden.</p>
-          <button type="button" id="trends-retry" class="retry">Erneut versuchen</button>
+          <h2 id="trends-error-title" class="state-title" data-i18n="common.errorTitle">Verbindung unterbrochen</h2>
+          <p class="state-msg" data-i18n="trends.errorMsg">Der Verlauf konnte nicht geladen werden.</p>
+          <button type="button" id="trends-retry" class="retry" data-i18n="common.retry">Erneut versuchen</button>
         </section>
 
         <!-- Trend-Inhalte -->
@@ -207,7 +217,7 @@
           <section class="chapter is-visible" aria-labelledby="h-t-avg">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">I</span>
-              <h2 id="h-t-avg">Im Durchschnitt</h2>
+              <h2 id="h-t-avg" data-i18n="trends.chAvg">Im Durchschnitt</h2>
             </header>
             <ul class="trend-stats" id="trend-stats"></ul>
           </section>
@@ -216,7 +226,7 @@
           <section class="chapter is-visible" aria-labelledby="h-t-score">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">II</span>
-              <h2 id="h-t-score">Score im Verlauf</h2>
+              <h2 id="h-t-score" data-i18n="trends.chScore">Score im Verlauf</h2>
             </header>
             <figure class="tchart">
               <div class="tchart-plot" id="chart-score" role="img"></div>
@@ -228,7 +238,7 @@
           <section class="chapter is-visible" aria-labelledby="h-t-stages">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">III</span>
-              <h2 id="h-t-stages">Phasen über die Nächte</h2>
+              <h2 id="h-t-stages" data-i18n="trends.chStages">Phasen über die Nächte</h2>
             </header>
             <figure class="tchart">
               <div class="tchart-plot" id="chart-stages" role="img"></div>
@@ -241,12 +251,12 @@
           <section class="chapter is-visible" aria-labelledby="h-t-vitals">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">IV</span>
-              <h2 id="h-t-vitals">Effizienz &amp; HRV</h2>
+              <h2 id="h-t-vitals" data-i18n="trends.chVitals">Effizienz &amp; HRV</h2>
             </header>
             <div class="trend-duo">
               <figure class="tchart">
                 <div class="tchart-head">
-                  <span class="tchart-label" id="label-eff">Schlafeffizienz</span>
+                  <span class="tchart-label" id="label-eff" data-i18n="trends.labelEff">Schlafeffizienz</span>
                   <span class="tchart-avg" id="avg-eff"></span>
                 </div>
                 <div class="tchart-plot tchart-plot--small" id="chart-eff" role="img"></div>
@@ -254,7 +264,7 @@
               </figure>
               <figure class="tchart">
                 <div class="tchart-head">
-                  <span class="tchart-label" id="label-hrv">HRV</span>
+                  <span class="tchart-label" id="label-hrv" data-i18n="trends.labelHrv">HRV</span>
                   <span class="tchart-avg" id="avg-hrv"></span>
                 </div>
                 <div class="tchart-plot tchart-plot--small" id="chart-hrv" role="img"></div>
@@ -267,7 +277,7 @@
           <section class="chapter is-visible" aria-labelledby="h-t-bilanz">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">V</span>
-              <h2 id="h-t-bilanz">Bilanz</h2>
+              <h2 id="h-t-bilanz" data-i18n="trends.chBalance">Bilanz</h2>
             </header>
             <dl class="ledger" id="trend-ledger"></dl>
           </section>
@@ -279,22 +289,22 @@
       <div id="system" hidden>
 
         <header class="system-head">
-          <h1 class="system-title">System</h1>
+          <h1 class="system-title" data-i18n="system.title">System</h1>
           <p class="system-meta" id="system-meta"></p>
         </header>
 
         <!-- Ladezustand -->
         <section id="system-loading" class="state state-sub" aria-live="polite">
           <div class="state-moon" aria-hidden="true"></div>
-          <p class="state-msg">Der Systemstatus wird geladen&nbsp;…</p>
+          <p class="state-msg" data-i18n="system.loading">Der Systemstatus wird geladen&nbsp;…</p>
         </section>
 
         <!-- Fehlerzustand -->
         <section id="system-error" class="state state-sub" hidden aria-labelledby="system-error-title">
           <div class="state-moon" aria-hidden="true"></div>
-          <h2 id="system-error-title" class="state-title">Verbindung unterbrochen</h2>
-          <p class="state-msg">Der Systemstatus konnte nicht geladen werden.</p>
-          <button type="button" id="system-retry" class="retry">Erneut versuchen</button>
+          <h2 id="system-error-title" class="state-title" data-i18n="common.errorTitle">Verbindung unterbrochen</h2>
+          <p class="state-msg" data-i18n="system.errorMsg">Der Systemstatus konnte nicht geladen werden.</p>
+          <button type="button" id="system-retry" class="retry" data-i18n="common.retry">Erneut versuchen</button>
         </section>
 
         <!-- Status-Inhalte -->
@@ -304,22 +314,22 @@
           <section class="chapter is-visible" aria-labelledby="h-s-module">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">I</span>
-              <h2 id="h-s-module">Module</h2>
+              <h2 id="h-s-module" data-i18n="system.chModules">Module</h2>
             </header>
             <ul class="status-ledger" id="module-ledger"
-                aria-label="Status der Somnoscope-Module"></ul>
+                aria-label="Status der Somnoscope-Module" data-i18n-aria="system.modulesAria"></ul>
           </section>
 
           <!-- II · Wearable-Adapter -->
           <section class="chapter is-visible" aria-labelledby="h-s-adapter">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">II</span>
-              <h2 id="h-s-adapter">Wearable-Adapter</h2>
+              <h2 id="h-s-adapter" data-i18n="system.chAdapters">Wearable-Adapter</h2>
             </header>
             <ul class="status-ledger" id="adapter-ledger"
-                aria-label="Konfigurierte Wearable-Adapter"></ul>
+                aria-label="Konfigurierte Wearable-Adapter" data-i18n-aria="system.adaptersAria"></ul>
             <p class="system-hint" id="adapter-empty" hidden>
-              Keine Adapter konfiguriert &mdash; siehe <code>config.yaml</code>.
+              <span data-i18n="system.noAdapters">Keine Adapter konfiguriert &mdash; siehe </span><code>config.yaml</code>.
             </p>
           </section>
 
@@ -327,10 +337,10 @@
           <section class="chapter is-visible" aria-labelledby="h-s-data">
             <header class="chapter-head">
               <span class="chapter-no" aria-hidden="true">III</span>
-              <h2 id="h-s-data">Daten-Bilanz</h2>
+              <h2 id="h-s-data" data-i18n="system.chData">Daten-Bilanz</h2>
             </header>
             <dl class="ledger" id="system-data-ledger"
-                aria-label="Bilanz der erfassten Schlafdaten"></dl>
+                aria-label="Bilanz der erfassten Schlafdaten" data-i18n-aria="system.dataAria"></dl>
           </section>
 
         </div><!-- /#system-body -->
@@ -341,10 +351,11 @@
       <!-- Daten-Export: dezente Hairline-Aktionen, rein lokale /api-URLs. -->
       <div class="export" role="group" aria-labelledby="export-title" aria-describedby="export-hint">
         <div class="export-text">
-          <span class="export-title" id="export-title">Daten exportieren</span>
-          <span class="export-hint" id="export-hint">Deine N&auml;chte als CSV/JSON &mdash; 100&nbsp;% lokal.</span>
+          <span class="export-title" id="export-title" data-i18n="export.title">Daten exportieren</span>
+          <span class="export-hint" id="export-hint" data-i18n="export.hint">Deine N&auml;chte als CSV/JSON &mdash; 100&nbsp;% lokal.</span>
         </div>
         <div class="export-actions">
+          <!-- aria-labels werden von app.js (updateExportLinks) sprachabhängig gesetzt. -->
           <a id="export-csv" class="export-btn" href="/api/export/reports.csv" download
              aria-label="Bis zu 365 Nächte als CSV-Datei herunterladen">
             <span class="export-arrow" aria-hidden="true">&darr;</span>CSV
@@ -356,7 +367,7 @@
         </div>
       </div>
       <p id="colophon-meta"></p>
-      <p class="colophon-claim">100&nbsp;% lokal ausgewertet · keine Cloud</p>
+      <p class="colophon-claim" data-i18n="colophon.claim">100&nbsp;% lokal ausgewertet · keine Cloud</p>
     </footer>
   </div>
 
