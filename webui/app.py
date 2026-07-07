@@ -12,6 +12,10 @@ schlanke JSON-API über den Report-Store aus :mod:`database`:
       :func:`analytics.compute_trends` (200 auch bei leerer Historie)
     * ``GET /api/coaching``       → Coaching-Text des lokalen LLM-Coach zur
       jüngsten Nacht (404 ``no_data`` wenn leer; in-memory gecacht pro Datum)
+    * ``GET /api/export/reports.csv?days=N``  → CSV-Download der letzten N
+      Nächte via :func:`analytics.export.reports_to_csv` (200 auch ohne Daten)
+    * ``GET /api/export/reports.json?days=N`` → JSON-Download der letzten N
+      Nächte via :func:`analytics.export.reports_to_json` (200 auch ohne Daten)
 
 Designentscheidungen:
     * **Graceful Degradation:** ``fastapi`` wird in ``try/except`` importiert.
@@ -48,7 +52,7 @@ _COACHING_CACHE_MAX = 64
 # Optionale Abhängigkeit: fastapi (Graceful Degradation, Kernprinzip 2)
 # --------------------------------------------------------------------------
 try:
-    from fastapi import FastAPI, HTTPException, Query
+    from fastapi import FastAPI, HTTPException, Query, Response
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
 
@@ -380,6 +384,107 @@ def _create_app() -> "FastAPI":
                 if len(cache) > _COACHING_CACHE_MAX:
                     cache.pop(next(iter(cache)))
         return {"enabled": True, "text": text, "date": date}
+
+    async def _export_reports(days: int) -> list[dict[str, Any]]:
+        """
+        Holt die letzten ``days`` Reports für einen Export aus dem Store.
+
+        Args:
+            days: Maximale Anzahl exportierter Nächte.
+
+        Returns:
+            Liste von SleepReport-Dicts (neueste zuerst, wie vom Store
+            geliefert); leere Liste, wenn kein Store verfügbar ist
+            (Graceful Degradation — der Export antwortet dann leer mit 200).
+        """
+        store = getattr(application.state, "store", None)
+        if store is None:
+            return []
+        return await store.list_reports(limit=days)
+
+    @application.get("/api/export/reports.csv")
+    async def export_reports_csv(
+        days: int = Query(default=365, ge=1, le=365),
+    ) -> Response:
+        """
+        Liefert die letzten ``days`` Nächte als CSV-Download.
+
+        Body ist :func:`analytics.export.reports_to_csv` über den letzten
+        ``days`` Reports (chronologisch aufsteigend, stabile
+        Spaltenreihenfolge, eine Zeile je Nacht). Antwortet auch bei leerer
+        Historie, fehlendem Store oder nicht importierbarem
+        ``analytics.export`` mit ``200`` — dann nur Header-Zeile bzw. leerer
+        Body (Graceful Degradation).
+
+        Args:
+            days: Maximale Anzahl exportierter Nächte (1–365, Default 365).
+
+        Returns:
+            :class:`fastapi.Response` mit ``text/csv; charset=utf-8`` und
+            ``Content-Disposition: attachment`` (Dateiname
+            ``somnoscope-reports.csv``).
+        """
+        reports = await _export_reports(days)
+        try:
+            from analytics.export import reports_to_csv
+        except ImportError:
+            logger.exception(
+                "analytics.export konnte nicht importiert werden — "
+                "/api/export/reports.csv liefert einen leeren Export."
+            )
+            body = ""
+        else:
+            # Serialisierung ist reine CPU-/String-Arbeit (bis zu 365
+            # Nächte) — via Thread auslagern, damit der Event-Loop frei bleibt.
+            body = await asyncio.to_thread(reports_to_csv, reports)
+        return Response(
+            content=body,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="somnoscope-reports.csv"'
+            },
+        )
+
+    @application.get("/api/export/reports.json")
+    async def export_reports_json(
+        days: int = Query(default=365, ge=1, le=365),
+    ) -> Response:
+        """
+        Liefert die letzten ``days`` Nächte als JSON-Download (volle Reports).
+
+        Body ist :func:`analytics.export.reports_to_json` über den letzten
+        ``days`` Reports: ``{"exported_report_count": int, "reports": [...]}``
+        (chronologisch aufsteigend). Antwortet auch bei leerer Historie,
+        fehlendem Store oder nicht importierbarem ``analytics.export`` mit
+        ``200`` und leerem Export (Graceful Degradation).
+
+        Args:
+            days: Maximale Anzahl exportierter Nächte (1–365, Default 365).
+
+        Returns:
+            :class:`fastapi.Response` mit ``application/json`` und
+            ``Content-Disposition: attachment`` (Dateiname
+            ``somnoscope-reports.json``).
+        """
+        reports = await _export_reports(days)
+        try:
+            from analytics.export import reports_to_json
+        except ImportError:
+            logger.exception(
+                "analytics.export konnte nicht importiert werden — "
+                "/api/export/reports.json liefert einen leeren Export."
+            )
+            body = '{"exported_report_count": 0, "reports": []}'
+        else:
+            # Serialisierung via Thread auslagern (Asyncio-First, s.o.).
+            body = await asyncio.to_thread(reports_to_json, reports)
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="somnoscope-reports.json"'
+            },
+        )
 
     return application
 

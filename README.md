@@ -80,8 +80,12 @@ The dashboard has two views (masthead switcher): **Diese Nacht** (the Three.js
 night scene for the latest report) and **Verlauf** (multi-night trends — score
 trend, stage distribution over time, efficiency/HRV, best night & consistency).
 
+Your data is yours: export all nights as **CSV** or **JSON** from the dashboard
+footer (or `GET /api/export/reports.csv?days=N` / `.json`).
+
 API endpoints: `GET /` (dashboard), `GET /api/report/latest`,
-`GET /api/reports?limit=N`, `GET /api/trends?days=N`, `GET /api/coaching`.
+`GET /api/reports?limit=N`, `GET /api/trends?days=N`, `GET /api/coaching`,
+`GET /api/export/reports.csv?days=N`, `GET /api/export/reports.json?days=N`.
 
 ## Architecture
 

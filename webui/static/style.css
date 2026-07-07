@@ -780,6 +780,85 @@ body.no-webgl .orb-anchor::before {
 
 .colophon-claim { letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
 
+/* --- Daten-Export (im Colophon) -------------------------------------------
+   Dezente Hairline-Aktionen in der Pill-Sprache des Ansichten-Umschalters:
+   kein Gradient, nur Linien und Mondlicht beim Hover/Fokus. */
+
+.export {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 28px;
+  padding-bottom: 20px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.export-text { min-width: 0; }
+
+.export-title {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.export-hint {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--faint);
+}
+
+.export-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 22px;
+  background: transparent;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.2s ease-out, background-color 0.2s ease-out, color 0.2s ease-out;
+}
+.export-btn:hover {
+  border-color: var(--lunar);
+  background: rgba(239, 233, 218, 0.06);
+  color: var(--lunar);
+}
+.export-btn:active { background: rgba(239, 233, 218, 0.12); }
+/* Sichtbarer Fokus kommt global über :focus-visible (Mondlicht-Outline). */
+
+.export-arrow {
+  font-size: 12px;
+  color: var(--faint);
+  transition: color 0.2s ease-out;
+}
+.export-btn:hover .export-arrow { color: var(--lunar); }
+
+@media (max-width: 480px) {
+  .export-actions { width: 100%; }
+  .export-btn { flex: 1; }
+}
+
 /* --- Tooltip ------------------------------------------------------------------ */
 
 .tooltip {

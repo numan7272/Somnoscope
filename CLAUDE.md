@@ -73,7 +73,8 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 │   ├── scorer.py           # compute_sleep_score: Whitebox-Score 0–100
 │   └── preprocessor.py     # stage_raw_eeg: Roh-EEG → Phasen (MNE/YASA-Pfad)
 ├── /analytics
-│   └── trends.py           # compute_trends: Mehr-Nächte-Aggregation (Verlauf-View)
+│   ├── trends.py           # compute_trends: Mehr-Nächte-Aggregation (Verlauf-View)
+│   └── export.py           # reports_to_csv/json: Daten-Export (CSV/JSON)
 ├── /database
 │   ├── store.py            # SleepStore-Basisklasse (Interface)
 │   ├── sqlite_store.py     # SQLiteStore: Default-Backend, 100 % lokal

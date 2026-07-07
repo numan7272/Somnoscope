@@ -101,6 +101,7 @@ function applyView() {
   // In der Verlauf-Ansicht weicht die 3D-Szene einem stillen CSS-Himmel
   // (ihre Anker liegen in der ausgeblendeten Nacht-Ansicht).
   document.body.classList.toggle("view-trends", !night);
+  updateExportLinks();
 }
 
 function showState(which) {
@@ -114,6 +115,38 @@ function setView(view) {
   applyView();
   window.scrollTo({ top: 0, behavior: "auto" });
   if (view === "trends") trendsView.show();
+}
+
+/* ------------------------------------------------------------------------- *
+ * Daten-Export (Colophon): CSV/JSON-Downloads, rein lokale /api-URLs
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Hält die Export-Links im Colophon aktuell. In der Verlauf-Ansicht wird der
+ * gewählte Zeitraum (7/14/30 Nächte, aus dem aria-pressed-Zustand des
+ * Range-Pickers gelesen) als ?days=… angehängt; in der Nacht-Ansicht bleiben
+ * die URLs ohne Parameter (Default = alle Nächte). Defensiv: fehlen die
+ * Elemente, passiert schlicht nichts.
+ */
+function updateExportLinks() {
+  const csv = el("export-csv");
+  const json = el("export-json");
+  if (!csv || !json) return;
+
+  let query = "";
+  let scope = "Bis zu 365 Nächte";
+  if (currentView === "trends") {
+    const pressed = el("range-picker")?.querySelector('button[aria-pressed="true"]');
+    const days = Number(pressed?.dataset.days);
+    if (Number.isFinite(days) && days > 0) {
+      query = `?days=${days}`;
+      scope = `Die letzten ${days} Nächte`;
+    }
+  }
+  csv.href = `/api/export/reports.csv${query}`;
+  json.href = `/api/export/reports.json${query}`;
+  csv.setAttribute("aria-label", `${scope} als CSV-Datei herunterladen`);
+  json.setAttribute("aria-label", `${scope} als JSON-Datei herunterladen`);
 }
 
 /* ------------------------------------------------------------------------- *
@@ -749,4 +782,10 @@ el("retry-btn").addEventListener("click", () => window.location.reload());
 el("nav-night").addEventListener("click", () => setView("night"));
 el("nav-trends").addEventListener("click", () => setView("trends"));
 
+// Zeitraum-Wechsel im Verlauf: Export-Links nachziehen. Der Listener ist
+// bewusst NACH createTrendsView() registriert — trends.js aktualisiert
+// aria-pressed synchron, bevor dieser Handler den Zustand ausliest.
+el("range-picker").addEventListener("click", () => updateExportLinks());
+
+updateExportLinks();
 main();

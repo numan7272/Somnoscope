@@ -268,6 +268,23 @@
     </main>
 
     <footer class="colophon">
+      <!-- Daten-Export: dezente Hairline-Aktionen, rein lokale /api-URLs. -->
+      <div class="export" role="group" aria-labelledby="export-title" aria-describedby="export-hint">
+        <div class="export-text">
+          <span class="export-title" id="export-title">Daten exportieren</span>
+          <span class="export-hint" id="export-hint">Deine N&auml;chte als CSV/JSON &mdash; 100&nbsp;% lokal.</span>
+        </div>
+        <div class="export-actions">
+          <a id="export-csv" class="export-btn" href="/api/export/reports.csv" download
+             aria-label="Bis zu 365 Nächte als CSV-Datei herunterladen">
+            <span class="export-arrow" aria-hidden="true">&darr;</span>CSV
+          </a>
+          <a id="export-json" class="export-btn" href="/api/export/reports.json" download
+             aria-label="Bis zu 365 Nächte als JSON-Datei herunterladen">
+            <span class="export-arrow" aria-hidden="true">&darr;</span>JSON
+          </a>
+        </div>
+      </div>
       <p id="colophon-meta"></p>
       <p class="colophon-claim">100&nbsp;% lokal ausgewertet · keine Cloud</p>
     </footer>
