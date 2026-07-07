@@ -35,6 +35,7 @@
       <nav class="view-nav" aria-label="Ansicht wechseln">
         <button type="button" id="nav-night" aria-pressed="true">Diese Nacht</button>
         <button type="button" id="nav-trends" aria-pressed="false">Verlauf</button>
+        <button type="button" id="nav-system" aria-pressed="false">System</button>
       </nav>
       <p class="masthead-date" id="night-date"></p>
     </header>
@@ -273,6 +274,67 @@
 
         </div><!-- /#trends-body -->
       </div><!-- /#trends -->
+
+      <!-- SYSTEM: Status-Ansicht (App, Module, Adapter, Datenbestand — kein 3D) -->
+      <div id="system" hidden>
+
+        <header class="system-head">
+          <h1 class="system-title">System</h1>
+          <p class="system-meta" id="system-meta"></p>
+        </header>
+
+        <!-- Ladezustand -->
+        <section id="system-loading" class="state state-sub" aria-live="polite">
+          <div class="state-moon" aria-hidden="true"></div>
+          <p class="state-msg">Der Systemstatus wird geladen&nbsp;…</p>
+        </section>
+
+        <!-- Fehlerzustand -->
+        <section id="system-error" class="state state-sub" hidden aria-labelledby="system-error-title">
+          <div class="state-moon" aria-hidden="true"></div>
+          <h2 id="system-error-title" class="state-title">Verbindung unterbrochen</h2>
+          <p class="state-msg">Der Systemstatus konnte nicht geladen werden.</p>
+          <button type="button" id="system-retry" class="retry">Erneut versuchen</button>
+        </section>
+
+        <!-- Status-Inhalte -->
+        <div id="system-body" hidden>
+
+          <!-- I · Module -->
+          <section class="chapter is-visible" aria-labelledby="h-s-module">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">I</span>
+              <h2 id="h-s-module">Module</h2>
+            </header>
+            <ul class="status-ledger" id="module-ledger"
+                aria-label="Status der Somnoscope-Module"></ul>
+          </section>
+
+          <!-- II · Wearable-Adapter -->
+          <section class="chapter is-visible" aria-labelledby="h-s-adapter">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">II</span>
+              <h2 id="h-s-adapter">Wearable-Adapter</h2>
+            </header>
+            <ul class="status-ledger" id="adapter-ledger"
+                aria-label="Konfigurierte Wearable-Adapter"></ul>
+            <p class="system-hint" id="adapter-empty" hidden>
+              Keine Adapter konfiguriert &mdash; siehe <code>config.yaml</code>.
+            </p>
+          </section>
+
+          <!-- III · Daten-Bilanz -->
+          <section class="chapter is-visible" aria-labelledby="h-s-data">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">III</span>
+              <h2 id="h-s-data">Daten-Bilanz</h2>
+            </header>
+            <dl class="ledger" id="system-data-ledger"
+                aria-label="Bilanz der erfassten Schlafdaten"></dl>
+          </section>
+
+        </div><!-- /#system-body -->
+      </div><!-- /#system -->
     </main>
 
     <footer class="colophon">

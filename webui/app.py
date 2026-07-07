@@ -19,6 +19,8 @@ schlanke JSON-API über den Report-Store aus :mod:`database`:
       Nächte via :func:`analytics.export.reports_to_csv` (200 auch ohne Daten)
     * ``GET /api/export/reports.json?days=N`` → JSON-Download der letzten N
       Nächte via :func:`analytics.export.reports_to_json` (200 auch ohne Daten)
+    * ``GET /api/status``         → System-Status (App-Version, Zeitzone,
+      Adapter, Modul-Flags, Daten-Umfang; 200 auch ohne Config/Store)
 
 Designentscheidungen:
     * **Graceful Degradation:** ``fastapi`` wird in ``try/except`` importiert.
@@ -50,6 +52,27 @@ STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
 #: Obergrenze für den in-memory Coaching-Cache (Key: date|generated_at) —
 #: verhindert unbegrenztes Wachstum im Dauerbetrieb (FIFO-Eviction).
 _COACHING_CACHE_MAX = 64
+
+#: Anzeigename der Anwendung im Status-Endpoint (``/api/status``).
+_APP_NAME = "Somnoscope"
+
+#: Fallback-Zeitzone, wenn keine Config geladen werden konnte.
+_DEFAULT_TIMEZONE = "UTC"
+
+#: Kanonische Modul-Namen für den ``modules``-Block von ``/api/status`` —
+#: exakt die Namen, die :meth:`core.config_loader.AppConfig.enabled_modules`
+#: liefert (stabile Reihenfolge für das Frontend).
+_STATUS_MODULES: tuple[str, ...] = (
+    "wearable",
+    "climate_sensors",
+    "database",
+    "ml_pipeline",
+    "llm_coach",
+)
+
+#: Obergrenze der für den ``data``-Block betrachteten Nächte — deckt sich mit
+#: dem ``limit``-Maximum der übrigen Report-Endpoints (1 Jahr Historie).
+_STATUS_REPORT_LIMIT = 365
 
 # --------------------------------------------------------------------------
 # Optionale Abhängigkeit: fastapi (Graceful Degradation, Kernprinzip 2)
@@ -522,6 +545,86 @@ def _create_app() -> "FastAPI":
                 "Content-Disposition": 'attachment; filename="somnoscope-reports.json"'
             },
         )
+
+    @application.get("/api/status")
+    async def status() -> dict[str, Any]:
+        """
+        Liefert den System-Status des Dashboards als JSON.
+
+        Aggregiert App-Metadaten (Name/Version der FastAPI-Instanz), die
+        konfigurierte Zeitzone, die Wearable-Adapter (Typ + Aktiv-Flag), die
+        Modul-Flags aus :meth:`AppConfig.enabled_modules` sowie den
+        Daten-Umfang aus dem Store (Nacht-Anzahl, Datums-Spanne, jüngster
+        Score). Antwortet auch ohne Config oder Store mit ``200`` und
+        wohldefinierten Defaults (Graceful Degradation): ohne Config leere
+        Adapter-Liste, alle Module ``false``, Zeitzone ``"UTC"``; ohne Store
+        (oder bei leerem Store) ``night_count = 0`` und ``None``-Felder.
+
+        Returns:
+            Status-Dict mit den Blöcken ``app``, ``timezone``, ``adapters``,
+            ``modules`` und ``data`` (JSON-serialisierbar).
+        """
+        cfg = getattr(application.state, "cfg", None)
+        store = getattr(application.state, "store", None)
+
+        # -- Config-Teil: Zeitzone, Adapter, Modul-Flags -------------------
+        timezone = _DEFAULT_TIMEZONE
+        adapters: list[dict[str, Any]] = []
+        modules: dict[str, bool] = {name: False for name in _STATUS_MODULES}
+        if cfg is not None:
+            try:
+                timezone = str(cfg.system.timezone)
+                adapters = [
+                    {"type": str(adapter.type), "enabled": bool(adapter.enabled)}
+                    for adapter in cfg.wearable.adapters
+                ]
+                enabled = set(cfg.enabled_modules())
+                modules = {name: name in enabled for name in _STATUS_MODULES}
+            except Exception:  # noqa: BLE001 — Status darf an der Config nicht sterben
+                logger.exception(
+                    "/api/status: Config konnte nicht ausgewertet werden — "
+                    "es werden Default-Werte geliefert."
+                )
+
+        # -- Daten-Teil: Nacht-Anzahl, Datums-Spanne, jüngster Score -------
+        reports: list[dict[str, Any]] = []
+        if store is not None:
+            try:
+                # list_reports ist async (SQLite-I/O läuft store-intern in
+                # Threads) — der Event-Loop bleibt frei.
+                reports = await store.list_reports(limit=_STATUS_REPORT_LIMIT)
+            except Exception:  # noqa: BLE001 — Status darf am Store nicht sterben
+                logger.exception(
+                    "/api/status: Reports konnten nicht geladen werden — "
+                    "der data-Block wird leer geliefert."
+                )
+                reports = []
+
+        date_from: str | None = None
+        date_to: str | None = None
+        latest_score: int | None = None
+        # Defensiv: fehlende/leere date-Felder überspringen statt zu crashen.
+        dates = sorted(str(r.get("date")) for r in reports if r.get("date"))
+        if dates:
+            date_from, date_to = dates[0], dates[-1]
+        if reports:
+            # Store-Contract: neueste Nacht zuerst.
+            score = reports[0].get("sleep_score")
+            if isinstance(score, (int, float)):
+                latest_score = int(round(score))
+
+        return {
+            "app": {"name": _APP_NAME, "version": application.version},
+            "timezone": timezone,
+            "adapters": adapters,
+            "modules": modules,
+            "data": {
+                "night_count": len(reports),
+                "date_from": date_from,
+                "date_to": date_to,
+                "latest_score": latest_score,
+            },
+        }
 
     return application
 

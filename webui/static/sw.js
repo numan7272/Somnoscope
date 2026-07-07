@@ -14,8 +14,10 @@
  */
 "use strict";
 
-/** Versionierter Cache-Name — bei Shell-Aenderungen hochzaehlen. */
-const CACHE_NAME = "somnoscope-shell-v1";
+/** Versionierter Cache-Name — bei Shell-Aenderungen hochzaehlen.
+ *  Zusaetzlich revalidiert shellCacheFirst im Hintergrund (stale-while-
+ *  revalidate), sodass Aenderungen Bestandsclients auch ohne Bump erreichen. */
+const CACHE_NAME = "somnoscope-shell-v2";
 
 /** Die App-Shell: alles, was das Dashboard-Geruest offline braucht. */
 const SHELL_ASSETS = [
@@ -89,12 +91,19 @@ async function apiNetworkFirst(request) {
  */
 async function shellCacheFirst(request, isNavigation) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(isNavigation ? "/" : request);
-  if (cached) return cached;
+  const key = isNavigation ? "/" : request;
+  const cached = await cache.match(key);
+  if (cached) {
+    // Stale-while-revalidate: gecachte Shell sofort ausliefern, im Hintergrund
+    // aktualisieren — so erreichen Frontend-Aenderungen Bestandsclients beim
+    // naechsten Laden auch OHNE Cache-Namen-Bump (best effort, nie werfend).
+    revalidateShell(cache, request, key);
+    return cached;
+  }
   try {
     const response = await fetch(request);
     // Nur vollwertige Antworten cachen (kein 404/500 einfrieren).
-    if (response.ok) cache.put(isNavigation ? "/" : request, response.clone());
+    if (response.ok) cache.put(key, response.clone());
     return response;
   } catch (err) {
     // Offline und nicht im Cache: bei Navigationen zur Not die Shell.
@@ -102,6 +111,15 @@ async function shellCacheFirst(request, isNavigation) {
     if (isNavigation && fallback) return fallback;
     throw err;
   }
+}
+
+/** Aktualisiert einen Shell-Eintrag im Hintergrund; Fehler (offline) egal. */
+function revalidateShell(cache, request, key) {
+  fetch(request)
+    .then((response) => {
+      if (response && response.ok) cache.put(key, response.clone());
+    })
+    .catch(() => { /* offline: gecachte Version bleibt gueltig */ });
 }
 
 /**

@@ -1170,3 +1170,111 @@ body.no-webgl .orb-anchor::before {
   .range-picker { width: 100%; justify-content: space-between; }
   .range-picker button { flex: 1; }
 }
+
+/* --- System (Status-Ansicht) ---------------------------------------------
+   Gleiche stille Ledger-Sprache wie Nacht & Verlauf: Hairlines, Serif-Werte,
+   keine Gradient-Cards. Statuspunkte dezent: Teal (aktiv) / Hohlpunkt (aus). */
+
+#system {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: clamp(96px, 14vh, 150px) var(--gutter) 0;
+}
+
+.system-head {
+  padding-bottom: clamp(22px, 4vh, 40px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.system-title {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(34px, 6vw, 52px);
+  letter-spacing: 0.01em;
+  color: var(--lunar);
+  line-height: 1.1;
+}
+
+.system-meta {
+  margin-top: 8px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--dim);
+  overflow-wrap: anywhere; /* lange Zeitzonen-Namen nie horizontal scrollen */
+}
+
+/* Status-Ledger: Zeilen wie im Kennzahlen-Ledger, rechts der Zustand. */
+.status-ledger li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 18px;
+  border-top: 1px solid var(--hairline);
+  padding: 15px 0 16px;
+}
+
+.status-name {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+  min-width: 0;
+}
+
+.status-name small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--faint);
+}
+
+/* Adapter-Typen sind technische Bezeichner → Monospace statt Versalien. */
+.status-name.is-code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--serif);
+  font-size: 16px;
+  white-space: nowrap;
+  color: var(--faint);
+}
+.status-state.is-on { color: var(--stage-light-ink); }
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid var(--hairline-strong);
+  background: transparent;
+}
+.status-state.is-on .status-dot {
+  border-color: transparent;
+  background: var(--stage-light);
+  box-shadow: 0 0 12px rgba(63, 184, 174, 0.45);
+}
+
+/* Hinweiszeile (z.B. „Keine Adapter konfiguriert"), gleiche Sprache wie tchart-hint. */
+.system-hint {
+  padding: 20px 0;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--faint);
+}
+
+@media (max-width: 760px) {
+  /* Masthead bricht mobil um (Umschalter in eigener Zeile) → mehr Kopf-Raum. */
+  #system { padding-top: clamp(118px, 20vh, 170px); }
+}

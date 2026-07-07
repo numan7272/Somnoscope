@@ -9,9 +9,11 @@
  *   3. Bootet danach die Three.js-Nachtszene (scene.js) als visuelle
  *      Schicht dahinter. Schlägt WebGL fehl, bleibt das Dashboard mit
  *      statischem CSS-Nachthimmel voll benutzbar (body.no-webgl).
- *   4. Stellt den Ansichten-Umschalter „Diese Nacht" / „Verlauf" bereit;
- *      die Verlauf-Ansicht (trends.js) rendert Mehr-Nächte-Trends aus
- *      /api/trends als ruhige SVG-Diagramme — ohne die 3D-Szene.
+ *   4. Stellt den Ansichten-Umschalter „Diese Nacht" / „Verlauf" / „System"
+ *      bereit; die Verlauf-Ansicht (trends.js) rendert Mehr-Nächte-Trends aus
+ *      /api/trends als ruhige SVG-Diagramme — ohne die 3D-Szene. Die
+ *      System-Ansicht rendert GET /api/status (App, Module, Adapter,
+ *      Daten-Bilanz) als stilles Status-Ledger — ebenfalls ohne 3D.
  *
  * Alles defensiv: fehlende Felder werden zu "–", nie zu Exceptions.
  * Keine externen Requests (Kernprinzip: Edge AI / offline).
@@ -84,22 +86,26 @@ const el = (id) => document.getElementById(id);
 /** Verlauf-Ansicht (trends.js) — lädt lazy beim ersten Umschalten. */
 const trendsView = createTrendsView();
 
-let currentView = "night";   // "night" | "trends"
+let currentView = "night";   // "night" | "trends" | "system"
 let nightState = "loading";  // Zustand der Nacht-Ansicht bleibt beim Wechsel erhalten
 
 /** Wendet Ansicht + Nacht-Zustand gemeinsam auf das DOM an. */
 function applyView() {
   const night = currentView === "night";
+  const trends = currentView === "trends";
+  const system = currentView === "system";
   el("state-loading").hidden = !night || nightState !== "loading";
   el("state-empty").hidden = !night || nightState !== "empty";
   el("state-error").hidden = !night || nightState !== "error";
   el("report").hidden = !night || nightState !== "report";
-  el("trends").hidden = night;
+  el("trends").hidden = !trends;
+  el("system").hidden = !system;
   el("night-date").hidden = !night;
   el("nav-night").setAttribute("aria-pressed", night ? "true" : "false");
-  el("nav-trends").setAttribute("aria-pressed", night ? "false" : "true");
-  // In der Verlauf-Ansicht weicht die 3D-Szene einem stillen CSS-Himmel
-  // (ihre Anker liegen in der ausgeblendeten Nacht-Ansicht).
+  el("nav-trends").setAttribute("aria-pressed", trends ? "true" : "false");
+  el("nav-system").setAttribute("aria-pressed", system ? "true" : "false");
+  // In der Verlauf- UND der System-Ansicht weicht die 3D-Szene einem stillen
+  // CSS-Himmel (ihre Anker liegen in der ausgeblendeten Nacht-Ansicht).
   document.body.classList.toggle("view-trends", !night);
   updateExportLinks();
 }
@@ -115,6 +121,7 @@ function setView(view) {
   applyView();
   window.scrollTo({ top: 0, behavior: "auto" });
   if (view === "trends") trendsView.show();
+  if (view === "system") showSystem();
 }
 
 /* ------------------------------------------------------------------------- *
@@ -147,6 +154,148 @@ function updateExportLinks() {
   json.href = `/api/export/reports.json${query}`;
   csv.setAttribute("aria-label", `${scope} als CSV-Datei herunterladen`);
   json.setAttribute("aria-label", `${scope} als JSON-Datei herunterladen`);
+}
+
+/* ------------------------------------------------------------------------- *
+ * System-Ansicht: Status aus GET /api/status (App, Module, Adapter, Daten)
+ * ------------------------------------------------------------------------- */
+
+/** Anzeige-Reihenfolge und deutsche Labels der Somnoscope-Module. */
+const SYSTEM_MODULES = [
+  { key: "wearable",        label: "Wearable",       note: "Schlafdaten-Quelle (BLE/Adapter)" },
+  { key: "climate_sensors", label: "Klimasensorik",  note: "CO₂, Temperatur, Luftfeuchte via MQTT" },
+  { key: "database",        label: "Datenbank",      note: "lokale Persistenz der Nächte" },
+  { key: "ml_pipeline",     label: "ML-Pipeline",    note: "Scoring und Phasen-Analyse" },
+  { key: "llm_coach",       label: "Schlaf-Coach",   note: "lokales Sprachmodell" },
+];
+
+let systemLoaded = false;   // /api/status wird nur einmal (erfolgreich) geladen
+let systemLoading = false;  // Doppel-Klicks während des Ladens abfangen
+
+/** Schaltet die Unterzustände der System-Ansicht (Laden / Fehler / Inhalt). */
+function showSystemState(which) {
+  el("system-loading").hidden = which !== "loading";
+  el("system-error").hidden = which !== "error";
+  el("system-body").hidden = which !== "body";
+}
+
+/** Eine Zeile des Status-Ledgers: Label + dezenter Statuspunkt + Zustandstext. */
+function statusRow({ label, note, active, onText, offText, code = false }) {
+  const li = document.createElement("li");
+  const name = document.createElement("span");
+  name.className = code ? "status-name is-code" : "status-name";
+  name.append(label);
+  if (note) {
+    const small = document.createElement("small");
+    small.textContent = note;
+    name.appendChild(small);
+  }
+  const state = document.createElement("span");
+  state.className = active ? "status-state is-on" : "status-state";
+  const dot = document.createElement("i");
+  dot.className = "status-dot";
+  dot.setAttribute("aria-hidden", "true");
+  state.append(dot, active ? onText : offText);
+  li.append(name, state);
+  return li;
+}
+
+/** Kopfzeile: App-Name · Version · Zeitzone (defensiv, fehlende Felder → "–"). */
+function renderSystemMeta(data) {
+  const name = typeof data?.app?.name === "string" && data.app.name ? data.app.name : "Somnoscope";
+  const version = typeof data?.app?.version === "string" && data.app.version ? data.app.version : "–";
+  const tz = typeof data?.timezone === "string" && data.timezone ? data.timezone : "–";
+  el("system-meta").textContent = `${name} · Version ${version} · Zeitzone ${tz}`;
+}
+
+/** Kapitel I: Modul-Status-Ledger (aktiv/inaktiv je Feature-Flag). */
+function renderSystemModules(data) {
+  const list = el("module-ledger");
+  list.textContent = "";
+  const modules = data?.modules ?? {};
+  for (const m of SYSTEM_MODULES) {
+    list.append(statusRow({
+      label: m.label, note: m.note,
+      active: modules[m.key] === true,
+      onText: "aktiv", offText: "inaktiv",
+    }));
+  }
+}
+
+/** Kapitel II: konfigurierte Wearable-Adapter (type + an/aus). */
+function renderSystemAdapters(data) {
+  const list = el("adapter-ledger");
+  list.textContent = "";
+  const adapters = Array.isArray(data?.adapters) ? data.adapters : [];
+  const rows = adapters.filter((a) => a && typeof a.type === "string" && a.type);
+  el("adapter-empty").hidden = rows.length > 0;
+  list.hidden = rows.length === 0;
+  for (const a of rows) {
+    list.append(statusRow({
+      label: a.type, note: "",
+      active: a.enabled === true,
+      onText: "an", offText: "aus",
+      code: true,
+    }));
+  }
+}
+
+/** Kapitel III: Daten-Bilanz (Nächte, Zeitraum von–bis, letzter Score). */
+function renderSystemData(data) {
+  const dl = el("system-data-ledger");
+  dl.textContent = "";
+  const d = data?.data ?? {};
+
+  const count = isNum(d.night_count) ? Math.max(0, Math.round(d.night_count)) : 0;
+  dl.append(ledgerRow("Erfasste Nächte", "im lokalen Archiv", fmtNum(count, 0)));
+
+  const from = typeof d.date_from === "string" ? parseISO(`${d.date_from}T12:00:00`) : null;
+  const to = typeof d.date_to === "string" ? parseISO(`${d.date_to}T12:00:00`) : null;
+  const range = from && to ? `${dateShortFmt.format(from)} – ${dateShortFmt.format(to)}` : "–";
+  const rangeNote = from && to
+    ? `${fmtNightDate(d.date_from)} bis ${fmtNightDate(d.date_to)}`
+    : "noch keine Nächte erfasst";
+  dl.append(ledgerRow("Zeitraum", rangeNote, range));
+
+  const score = isNum(d.latest_score) ? Math.round(d.latest_score) : null;
+  dl.append(ledgerRow("Letzter Score", "jüngste ausgewertete Nacht",
+    score === null ? "–" : fmtNum(score, 0), score === null ? "" : "von 100"));
+}
+
+/**
+ * Lädt /api/status (einmalig, lazy beim ersten Umschalten) und rendert die
+ * System-Ansicht. Defensiv: Netzwerk-/Render-Fehler führen zum Fehlerzustand
+ * mit Retry-Knopf, nie zu Exceptions nach außen. Keine externen Requests.
+ */
+async function showSystem() {
+  if (systemLoaded || systemLoading) return;
+  systemLoading = true;
+  showSystemState("loading");
+
+  let data = null;
+  try {
+    data = await fetchJSON("/api/status");
+  } catch (err) {
+    console.warn("Somnoscope: Systemstatus konnte nicht geladen werden.", err);
+  }
+  systemLoading = false;
+
+  if (!data || typeof data !== "object") {
+    showSystemState("error");
+    return;
+  }
+
+  try {
+    renderSystemMeta(data);
+    renderSystemModules(data);
+    renderSystemAdapters(data);
+    renderSystemData(data);
+    systemLoaded = true;
+    showSystemState("body");
+  } catch (err) {
+    console.error("Somnoscope: System-Rendering-Fehler.", err);
+    showSystemState("error");
+  }
 }
 
 /* ------------------------------------------------------------------------- *
@@ -781,6 +930,9 @@ async function main() {
 el("retry-btn").addEventListener("click", () => window.location.reload());
 el("nav-night").addEventListener("click", () => setView("night"));
 el("nav-trends").addEventListener("click", () => setView("trends"));
+el("nav-system").addEventListener("click", () => setView("system"));
+// Retry der System-Ansicht: lädt /api/status neu, ohne die Seite zu verlassen.
+el("system-retry").addEventListener("click", () => showSystem());
 
 // Zeitraum-Wechsel im Verlauf: Export-Links nachziehen. Der Listener ist
 // bewusst NACH createTrendsView() registriert — trends.js aktualisiert
