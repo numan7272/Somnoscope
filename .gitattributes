@@ -1,0 +1,8 @@
+# Shell-Skripte MÜSSEN LF-Zeilenenden behalten — sonst schlägt der Container-
+# Start fehl (Shebang "#!/bin/sh\r" -> "no such file or directory").
+# Wichtig, weil das Projekt auch auf Windows (core.autocrlf=true) geklont wird.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# docker-entrypoint braucht das Executable-Bit (chmod passiert zusätzlich im
+# Dockerfile, aber so bleibt es auch im Git-Index korrekt).

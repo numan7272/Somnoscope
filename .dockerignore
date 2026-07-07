@@ -1,0 +1,57 @@
+# ============================================================================
+# Somnoscope — .dockerignore
+# ============================================================================
+# Hält den Build-Kontext klein und verhindert, dass lokale Daten, Caches oder
+# Git-Interna ins Image gelangen. Besonders wichtig: `data/` (SQLite mit
+# Gesundheitsdaten!) und `logs/` dürfen NIE ins Image eingebacken werden —
+# sie kommen zur Laufzeit als Volume (siehe docker-compose.yml).
+# ============================================================================
+
+# --- Versionskontrolle & CI ---
+.git
+.gitignore
+.github
+
+# --- Python-Artefakte ---
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# --- Virtuelle Umgebungen (Host-spezifisch, im Image nutzlos) ---
+.venv/
+venv/
+env/
+
+# --- Lokale Daten & Logs (kommen als Volume, nicht ins Image) ---
+data/
+logs/
+*.db
+*.sqlite3
+*.edf
+
+# --- Secrets (NIE ins Image backen — compose empfiehlt .env für Tokens) ---
+.env
+.env.*
+*.env
+
+# --- Frontend-Tooling (falls lokal vorhanden; webui/static ist gevendort) ---
+node_modules/
+
+# --- Docker-eigene Dateien (werden nicht im Image gebraucht) ---
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# --- Tests & Dev-Abhängigkeiten (Runtime-Image bleibt schlank) ---
+tests/
+requirements-dev.txt
+
+# --- Editor-/OS-Reste ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

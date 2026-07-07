@@ -171,6 +171,70 @@ payload end-to-end and only Google's cloud can decrypt it. Use the opt-in
 `fitbit_gh_api` adapter instead (see
 [docs/fitbit_air_setup.md](docs/fitbit_air_setup.md)).
 
+## Docker / Self-Hosting
+
+The whole stack also runs containerized — still 100 % local, no cloud involved:
+
+```bash
+docker compose up -d --build
+# → Dashboard: http://localhost:8000
+```
+
+This starts three services (see [docker-compose.yml](docker-compose.yml)):
+
+| Service     | What it does                                                        |
+|-------------|---------------------------------------------------------------------|
+| `web`       | FastAPI dashboard (`uvicorn webui.app:app`), published on port 8000 |
+| `tracker`   | The tracker daemon (`python main.py`), writes SleepReports          |
+| `mosquitto` | Local MQTT broker for ESP32 climate sensors, port 1883             |
+
+`web` and `tracker` are built from the **same image** and both mount your local
+`config.yaml` read-only, so the usual `enabled` flags keep working — edit the
+file and `docker compose restart web tracker`.
+
+**Data persistence & shared SQLite:** both app containers share the named
+volume `somnoscope-data` mounted at `/app/data` — that's where the common
+SQLite database (`somnoscope.db`) lives. The tracker writes reports, the
+dashboard reads them; the data survives container rebuilds and restarts
+(`docker compose down` keeps it, `docker compose down -v` deletes it). To seed
+demo history for the "Verlauf" view:
+
+```bash
+docker compose run --rm tracker python main.py --backfill 30
+```
+
+**Enabling climate sensors (MQTT):** the Mosquitto broker is always running
+(config in [docker/mosquitto.conf](docker/mosquitto.conf), anonymous access for
+the local homelab). Point your ESP32 at port 1883 of the Docker host and set in
+`config.yaml`:
+
+```yaml
+climate_sensors:
+  enabled: true
+  broker_host: "mosquitto"   # Compose service name instead of "localhost"
+```
+
+**Enabling the LLM coach (Ollama):** the optional `ollama` profile runs a local
+Ollama server with a persistent model volume:
+
+```bash
+docker compose --profile ollama up -d
+docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_K_M
+```
+
+Then set `llm_coach.ollama_url: "http://ollama:11434"` in `config.yaml`.
+Without the profile the coach falls back to its rule-based German summary —
+never the cloud.
+
+**Optional InfluxDB channel:** `docker compose --profile influxdb up -d` starts
+an InfluxDB v2 instance; set `database.enabled: true` and
+`database.url: "http://influxdb:8086"` in `config.yaml` (SQLite remains the
+primary store either way).
+
+The privacy notice below applies unchanged: the compose file publishes ports
+8000/1883 on the host — keep them inside your own network or add
+authentication/TLS yourself.
+
 ## Tech Stack
 
 * Python 3.10+ (`asyncio`-first)
