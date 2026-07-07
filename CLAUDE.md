@@ -24,20 +24,21 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 3. **Whitebox-Ansatz:** Jeder Verarbeitungsschritt (besonders vor dem ML-Scoring) wird mit
    `logging` dokumentiert. Wir wollen wissen *warum* die KI so entscheidet — nicht nur das
    Endergebnis.
-4. **Adapter-Pattern:** Wearables haben unterschiedliche Datenstrukturen. Parser-Klassen
-   (Adapter) übersetzen proprietäre BLE-Hex-Daten in ein einheitliches internes JSON-Format
-   bzw. eine EDF-Datei.
+4. **Adapter-Pattern:** Wearables haben unterschiedliche Datenstrukturen. Adapter-Klassen
+   übersetzen proprietäre Rohdaten in das einheitliche interne Format `WearableReading`
+   (frozen Dataclass, `adapters/base_wearable.py`).
 
 ---
 
 ## 🛠️ Tech-Stack
 
 * **Sprache:** Python 3.10+
-* **Bluetooth Sniffing:** `bleak` (asynchron)
+* **Web:** `fastapi` + `uvicorn`; Dashboard mit Three.js (lokal gevendort, offline)
+* **Bluetooth / EEG:** `brainflow` (optional, Feature C — `adapters/eeg_muse.py`)
 * **IoT / Klima:** `paho-mqtt` (lokaler Mosquitto-Broker)
-* **Datenbank:** `influxdb-client` (Time-Series)
+* **Datenbank:** SQLite (Default, stdlib) + optional `influxdb-client` (Time-Series)
 * **Machine Learning:** `yasa` (Schlaf-Scoring), `mne`, `scipy`, `numpy`
-* **LLM Coach:** Lokale LLM-Anbindung via `ollama` oder `llama-cpp-python`
+* **LLM Coach:** lokales Ollama (HTTP) mit regelbasiertem Fallback, zweisprachig DE/EN
 
 ---
 
@@ -51,7 +52,11 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 ├── requirements.txt        # Python-Abhängigkeiten (Runtime)
 ├── requirements-dev.txt    # Dev-/Test-Abhängigkeiten (pytest)
 ├── config.yaml             # Zentrale Steuerung (welche Module sind aktiv?)
-├── main.py                 # Einstiegspunkt: python main.py [--once] [config-pfad]
+├── main.py                 # Einstiegspunkt: python main.py [--once|--backfill N] [config-pfad]
+├── Dockerfile              # Container-Image (web + tracker teilen sich ein Image)
+├── docker-compose.yml      # Self-Hosting: web + tracker + mosquitto (+ Profile ollama/influxdb)
+├── /docker
+│   └── mosquitto.conf      # Broker-Konfiguration für den Compose-Stack
 ├── /.github
 │   └── workflows/ci.yml    # GitHub Actions: pytest auf Python 3.11/3.12
 ├── /core
@@ -80,14 +85,17 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 │   ├── sqlite_store.py     # SQLiteStore: Default-Backend, 100 % lokal
 │   └── influx_writer.py    # Optionaler InfluxDB-Zeitreihen-Kanal
 ├── /llm_coach
-│   ├── coach.py            # generate_coaching: Ollama lokal + Regel-Fallback
+│   ├── coach.py            # generate_coaching: Ollama lokal + Regel-Fallback (zweisprachig DE/EN)
 │   └── prompt_builder.py   # build_coach_prompt: Report+Historie → LLM-Prompt
 ├── /webui
 │   ├── app.py              # FastAPI-App (`uvicorn webui.app:app`), /api/*-Endpoints
-│   └── static/             # Dashboard: Three.js-Nacht (scene.js) + Verlauf/Trends
-│                           #   (trends.js); index.html/app.js/style.css,
+│   └── static/             # Dashboard mit drei Ansichten: Three.js-Nacht (scene.js),
+│                           #   Verlauf/Trends (trends.js), System-Status;
+│                           #   i18n.js (DE/EN-Sprachumschaltung),
+│                           #   sw.js + manifest.webmanifest (PWA, installierbar/offline);
+│                           #   index.html/app.js/style.css,
 │                           #   vendor/three.module.min.js — 100 % offline
-├── /tests                  # pytest-Suite (97 Tests)
+├── /tests                  # pytest-Suite (180 Tests)
 ├── /docs
 │   └── fitbit_air_setup.md # Feature-B-Setup (ghealth-CLI, Cloud-Ausnahme)
 ├── /data                   # Lokale Daten (somnoscope.db — nicht eingecheckt)
@@ -109,8 +117,7 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
   bevorzugt `@dataclass(frozen=True)`.
 * **Logging statt print:** Nur in absoluten Edge-Cases (z.B. CLI-Banner in `main.py`)
   ist `print` erlaubt. Sonst immer `logging`.
-* **Keine Magic Strings:** Konstanten in `core/constants.py` (wird bei Bedarf angelegt)
-  oder als Enum.
+* **Keine Magic Strings:** Konstanten in `core/constants.py` oder als Enum.
 
 ---
 
@@ -129,7 +136,7 @@ Da das Projekt öffentlich auf GitHub steht, halten wir die Bug-Historie sauber:
 ## 🗺️ Phasen-Roadmap
 
 Alle sechs Phasen sind abgeschlossen — das Projekt ist feature-komplett
-(97 pytest grün, CI via GitHub Actions in `.github/workflows/ci.yml`).
+(180 pytest grün, CI via GitHub Actions in `.github/workflows/ci.yml`).
 
 * **Phase 1 ✅:** Infrastruktur-Fundament — Config-Loader (`core/config_loader.py`),
   Logger, Bootstrap (`main.py`, inkl. `--once`-Modus).
@@ -151,6 +158,14 @@ Alle sechs Phasen sind abgeschlossen — das Projekt ist feature-komplett
   prefers-reduced-motion, DOM-a11y-Layer). Start: `uvicorn webui.app:app`.
 * **Phase 6 ✅:** LLM-Coach — `llm_coach/`: lokales Ollama mit regelbasiertem
   Fallback (nie Cloud), integriert als Coach-Karte im Dashboard (`/api/coaching`).
+* **Bonus (nach Phase 6) ✅:** echtes Muse-EEG (Feature C, BrainFlow→YASA statt Stub);
+  Verlauf-/Trend-Ansicht (`analytics/trends.py`, Seed via `python main.py --backfill N`);
+  Daten-Export CSV/JSON (`analytics/export.py`, `/api/export/reports.csv|.json`);
+  Docker/Self-Hosting (`docker compose up -d --build`: web + tracker + mosquitto,
+  optionale Profile `ollama`/`influxdb`); PWA (sw.js + manifest.webmanifest,
+  installierbar und offline-fähig); System-Ansicht als dritte Dashboard-View
+  (`/api/status`); i18n: zweisprachiges Dashboard DE/EN (`webui/static/i18n.js`)
+  und zweisprachiger Coach (`/api/coaching?lang=de|en`, Ollama UND Regel-Fallback).
 
 ---
 

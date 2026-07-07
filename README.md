@@ -9,8 +9,10 @@
 > wearable, climate, and ML data — no cloud, no vendor lock-in, and every
 > processing step auditable on your own machine.
 
-**Status:** Feature-complete — all six roadmap phases are implemented, covered by
-97 passing tests, and run end-to-end out of the box (no hardware required).
+**Status:** Feature-complete — all six roadmap phases plus a round of bonus
+features (real Muse EEG, trends view, data export, Docker, PWA, system view,
+DE/EN i18n) are implemented, covered by 180 passing tests, and run end-to-end
+out of the box (no hardware required).
 
 ## Motivation
 
@@ -42,7 +44,13 @@ are optional plug-and-play modules.
 | InfluxDB time-series writer (optional, for Grafana)     | ✅     | `database/`       |
 | MQTT climate-sensor fusion (ESP32 → `report["climate"]`)| ✅     | `iot/`            |
 | Three.js web dashboard "Schlaf-Observatorium"           | ✅     | `webui/`          |
-| Local LLM coach (Ollama) with rule-based fallback       | ✅     | `llm_coach/`      |
+| Three dashboard views: Tonight / Trends / System        | ✅     | `webui/static/`   |
+| DE/EN language switcher (full UI i18n)                  | ✅     | `webui/static/i18n.js` |
+| Installable PWA — offline app shell (service worker)    | ✅     | `webui/static/`   |
+| Multi-night trends aggregation (+ `--backfill N` seed)  | ✅     | `analytics/`      |
+| Data export as CSV/JSON (dashboard footer + API)        | ✅     | `analytics/export.py` |
+| Bilingual (DE/EN) local LLM coach (Ollama) with rule-based fallback | ✅ | `llm_coach/` |
+| Docker self-hosting (`docker compose up -d --build`)    | ✅     | `docker-compose.yml` |
 | GitHub Actions CI (pytest on Python 3.11/3.12)          | ✅     | `.github/`        |
 
 ### Wearable adapters
@@ -76,9 +84,17 @@ locally, no CDN), with a WebGL fallback, `prefers-reduced-motion` support, and a
 parallel DOM layer for accessibility. The coach card asynchronously loads
 advice from the local LLM coach.
 
-The dashboard has two views (masthead switcher): **Diese Nacht** (the Three.js
-night scene for the latest report) and **Verlauf** (multi-night trends — score
-trend, stage distribution over time, efficiency/HRV, best night & consistency).
+The dashboard has three views (masthead switcher): **Diese Nacht / Tonight**
+(the Three.js night scene for the latest report), **Verlauf / Trends**
+(multi-night trends — score trend, stage distribution over time,
+efficiency/HRV, best night & consistency), and **System** (live health of all
+modules — store, adapters, MQTT, coach — via `GET /api/status`).
+
+The whole UI is **bilingual**: a DE/EN language switcher in the masthead
+(`webui/static/i18n.js`) translates every label live, and the coach card
+requests its advice in the selected language
+(`GET /api/coaching?lang=de|en`) — both the LLM coach and its rule-based
+fallback speak German and English.
 
 It's an installable **PWA**: "add to home screen" on mobile, with a service
 worker that caches the app shell so the dashboard opens offline (data still
@@ -88,8 +104,10 @@ Your data is yours: export all nights as **CSV** or **JSON** from the dashboard
 footer (or `GET /api/export/reports.csv?days=N` / `.json`).
 
 API endpoints: `GET /` (dashboard), `GET /api/report/latest`,
-`GET /api/reports?limit=N`, `GET /api/trends?days=N`, `GET /api/coaching`,
-`GET /api/export/reports.csv?days=N`, `GET /api/export/reports.json?days=N`.
+`GET /api/reports?limit=N`, `GET /api/trends?days=N`,
+`GET /api/coaching?lang=de|en`, `GET /api/status`,
+`GET /api/export/reports.csv?days=N`, `GET /api/export/reports.json?days=N`,
+plus `GET /sw.js` and `GET /manifest.webmanifest` for the PWA.
 
 ## Architecture
 
@@ -227,8 +245,8 @@ docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_K_M
 ```
 
 Then set `llm_coach.ollama_url: "http://ollama:11434"` in `config.yaml`.
-Without the profile the coach falls back to its rule-based German summary —
-never the cloud.
+Without the profile the coach falls back to its rule-based summary (in the
+selected language, DE or EN) — never the cloud.
 
 **Optional InfluxDB channel:** `docker compose --profile influxdb up -d` starts
 an InfluxDB v2 instance; set `database.enabled: true` and
@@ -253,7 +271,7 @@ authentication/TLS yourself.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q        # 97 tests
+python -m pytest -q        # 180 tests
 ```
 
 Every push and pull request runs the full pytest suite on Python 3.11 and 3.12
@@ -271,6 +289,16 @@ All six phases are complete:
 - [x] Phase 5 — persistence (SQLite default, InfluxDB optional) + FastAPI/Three.js dashboard
 - [x] Phase 6 — local LLM coach (Ollama + rule-based fallback), integrated into the dashboard
 
+Bonus features shipped on top of the roadmap:
+
+- [x] Real Muse EEG adapter (Feature C: BrainFlow → YASA, no stub)
+- [x] Trends view ("Verlauf") + `python main.py --backfill N` history seeding
+- [x] Data export as CSV/JSON (dashboard footer + `/api/export/*`)
+- [x] Docker / self-hosting (`docker compose up -d --build`, optional `ollama`/`influxdb` profiles)
+- [x] Installable, offline-capable PWA (service worker + web manifest)
+- [x] System view (third dashboard view, module health via `/api/status`)
+- [x] i18n: bilingual DE/EN dashboard (`i18n.js`) + bilingual coach (`/api/coaching?lang=`)
+
 ## Core principles
 
 1. **Edge AI / privacy first** — all health data stays local; no cloud calls for
@@ -286,8 +314,7 @@ All six phases are complete:
 ## Contributing
 
 Bugs and ideas go through [GitHub Issues](https://github.com/numan7272/Somnoscope/issues).
-The full workflow is documented in [CONTRIBUTING.md](CONTRIBUTING.md) (currently in
-German — English translation coming soon). Short version:
+The full workflow is documented in [CONTRIBUTING.md](CONTRIBUTING.md). Short version:
 
 1. **Open an issue first** — even for small bugs, with reproduction steps and
    expected behavior.
