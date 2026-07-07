@@ -13,6 +13,8 @@ Ausführung::
     python main.py                 # Dauerbetrieb (Tracker-Daemon)
     python main.py --once          # genau ein Poll-Zyklus (z.B. „letzte Nacht
                                    # verarbeiten"), dann beenden — ideal für Cron/CI
+    python main.py --check         # Setup-Selbstdiagnose (Config/Deps/Store), dann beenden
+    python main.py --backfill 30   # 30 simulierte Vergangenheits-Nächte (Demo-Historie)
     python main.py path/to/other-config.yaml
 
 Das Dashboard wird separat gestartet::
@@ -212,23 +214,24 @@ async def _backfill(cfg: AppConfig, nights: int) -> None:
 # CLI-Einstieg
 # ----------------------------------------------------------------------------
 
-def _parse_args(argv: list[str]) -> tuple[Path, bool, int]:
+def _parse_args(argv: list[str]) -> tuple[Path, bool, int, bool]:
     """
     Wertet die CLI-Argumente aus.
 
     Unterstützt ``--once`` (einmaliger Poll), ``--backfill N`` (N simulierte
-    Nächte Historie erzeugen, z.B. für die Verlauf-Ansicht) und einen optionalen
-    Config-Pfad (erstes Nicht-Flag-Argument).
+    Nächte Historie erzeugen), ``--check`` (Setup-Selbstdiagnose statt
+    Normalbetrieb) und einen optionalen Config-Pfad (erstes Nicht-Flag-Argument).
 
     Args:
         argv: ``sys.argv`` (inkl. Programmname an Index 0).
 
     Returns:
-        Tupel aus Config-Pfad (Default ``config.yaml``), ``once``-Flag und
-        ``backfill``-Anzahl (0 = kein Backfill).
+        Tupel aus Config-Pfad (Default ``config.yaml``), ``once``-Flag,
+        ``backfill``-Anzahl (0 = kein Backfill) und ``check``-Flag.
     """
     once = False
     backfill = 0
+    check = False
     config_path = Path("config.yaml")
     args = argv[1:]
     i = 0
@@ -236,6 +239,8 @@ def _parse_args(argv: list[str]) -> tuple[Path, bool, int]:
         arg = args[i]
         if arg in ("--once", "-1"):
             once = True
+        elif arg == "--check":
+            check = True
         elif arg == "--backfill":
             i += 1
             if i < len(args):
@@ -246,7 +251,7 @@ def _parse_args(argv: list[str]) -> tuple[Path, bool, int]:
         elif not arg.startswith("-"):
             config_path = Path(arg)
         i += 1
-    return config_path, once, backfill
+    return config_path, once, backfill, check
 
 
 def _run() -> int:
@@ -256,7 +261,7 @@ def _run() -> int:
     Returns:
         Den Exit-Code, den der Prozess an die Shell zurückgibt.
     """
-    cfg_path, once, backfill = _parse_args(sys.argv)
+    cfg_path, once, backfill, check = _parse_args(sys.argv)
 
     try:
         cfg = load_config(cfg_path)
@@ -267,6 +272,16 @@ def _run() -> int:
         return EXIT_CONFIG_ERROR
 
     setup_logging(cfg.system.log_level, cfg.system.log_dir)
+
+    if check:
+        # Setup-Selbstdiagnose statt Normalbetrieb: prüft Config, optionale
+        # Pakete, Store-Schreibbarkeit, aktive-Adapter-Deps und Ollama.
+        from core.selftest import format_report, run_selftest, selftest_exit_code
+
+        results = asyncio.run(run_selftest(cfg))
+        # print bewusst: der Report IST die CLI-Ausgabe (wie das Banner in main()).
+        print(format_report(results))
+        return selftest_exit_code(results)
 
     try:
         asyncio.run(main(cfg, once=once, backfill=backfill))
