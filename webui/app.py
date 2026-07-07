@@ -8,6 +8,8 @@ schlanke JSON-API über den Report-Store aus :mod:`database`:
     * ``GET /static/...``         → CSS/JS-Assets
     * ``GET /api/report/latest``  → jüngster SleepReport (404 ``no_data`` wenn leer)
     * ``GET /api/reports?limit=N``→ Liste der letzten N Reports (neueste zuerst)
+    * ``GET /api/trends?days=N``  → Mehr-Nächte-Trends via
+      :func:`analytics.compute_trends` (200 auch bei leerer Historie)
     * ``GET /api/coaching``       → Coaching-Text des lokalen LLM-Coach zur
       jüngsten Nacht (404 ``no_data`` wenn leer; in-memory gecacht pro Datum)
 
@@ -30,6 +32,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+
+from core.constants import SLEEP_STAGES
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +132,42 @@ def _open_store() -> Any | None:
             "das Dashboard läuft ohne Daten weiter."
         )
         return None
+
+
+def _empty_trends() -> dict[str, Any]:
+    """
+    Baut das leere Trends-Dict im Contract-Format von ``compute_trends``.
+
+    Dient als Fallback, falls das :mod:`analytics`-Modul nicht importierbar
+    ist (Graceful Degradation) — der ``/api/trends``-Endpoint antwortet dann
+    trotzdem mit ``200`` und einer wohlgeformten, leeren Struktur, statt zu
+    crashen.
+
+    Returns:
+        Trends-Dict mit ``n_nights = 0``, leeren Serien und ``None``-Werten.
+    """
+    return {
+        "n_nights": 0,
+        "range": {"from": None, "to": None},
+        "averages": {
+            "sleep_score": None,
+            "sleep_efficiency_pct": None,
+            "total_sleep_min": None,
+            "avg_hrv": None,
+        },
+        "stage_distribution_pct": {stage: 0.0 for stage in SLEEP_STAGES},
+        "series": {
+            "date": [],
+            "sleep_score": [],
+            "sleep_efficiency_pct": [],
+            "total_sleep_min": [],
+            "avg_hrv": [],
+            "stages_pct": [],
+        },
+        "best_night": None,
+        "worst_night": None,
+        "consistency": {"score_stddev": None},
+    }
 
 
 def _create_app() -> "FastAPI":
@@ -234,6 +274,46 @@ def _create_app() -> "FastAPI":
         if store is None:
             return []
         return await store.list_reports(limit=limit)
+
+    @application.get("/api/trends")
+    async def trends(
+        days: int = Query(default=30, ge=1, le=365),
+    ) -> dict[str, Any]:
+        """
+        Liefert Mehr-Nächte-Trends für die Verlauf-Ansicht des Dashboards.
+
+        Holt die letzten ``days`` Reports aus dem Store und verdichtet sie
+        via :func:`analytics.compute_trends` (Mittelwerte, chronologische
+        Serien, Phasenverteilung, beste/schlechteste Nacht, Score-Streuung).
+        Antwortet auch bei leerer Historie oder fehlendem Store mit ``200``
+        und ``n_nights = 0`` — die Verlauf-Ansicht zeigt dann ihren
+        Empty-State (Graceful Degradation).
+
+        Args:
+            days: Maximale Anzahl betrachteter Nächte (1–365, Default 30).
+
+        Returns:
+            Das JSON-serialisierbare Trends-Dict von
+            :func:`analytics.compute_trends` bzw. dessen leere Form, wenn
+            das ``analytics``-Modul nicht verfügbar ist.
+        """
+        store = getattr(application.state, "store", None)
+        reports: list[dict[str, Any]] = []
+        if store is not None:
+            reports = await store.list_reports(limit=days)
+
+        try:
+            from analytics import compute_trends
+        except ImportError:
+            logger.exception(
+                "analytics konnte nicht importiert werden — "
+                "/api/trends liefert eine leere Trend-Struktur."
+            )
+            return _empty_trends()
+
+        # compute_trends ist reine CPU-Arbeit (bis zu 365 Nächte) —
+        # via Thread auslagern, damit der Event-Loop frei bleibt.
+        return await asyncio.to_thread(compute_trends, reports)
 
     @application.get("/api/coaching")
     async def coaching() -> dict[str, Any]:

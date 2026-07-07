@@ -9,11 +9,16 @@
  *   3. Bootet danach die Three.js-Nachtszene (scene.js) als visuelle
  *      Schicht dahinter. Schlägt WebGL fehl, bleibt das Dashboard mit
  *      statischem CSS-Nachthimmel voll benutzbar (body.no-webgl).
+ *   4. Stellt den Ansichten-Umschalter „Diese Nacht" / „Verlauf" bereit;
+ *      die Verlauf-Ansicht (trends.js) rendert Mehr-Nächte-Trends aus
+ *      /api/trends als ruhige SVG-Diagramme — ohne die 3D-Szene.
  *
  * Alles defensiv: fehlende Felder werden zu "–", nie zu Exceptions.
  * Keine externen Requests (Kernprinzip: Edge AI / offline).
  */
 "use strict";
+
+import { createTrendsView } from "./trends.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -71,16 +76,44 @@ function fmtNightDate(dateStr) {
 }
 
 /* ------------------------------------------------------------------------- *
- * Zustands-Umschaltung
+ * Zustands- und Ansichten-Umschaltung (Diese Nacht / Verlauf)
  * ------------------------------------------------------------------------- */
 
 const el = (id) => document.getElementById(id);
 
+/** Verlauf-Ansicht (trends.js) — lädt lazy beim ersten Umschalten. */
+const trendsView = createTrendsView();
+
+let currentView = "night";   // "night" | "trends"
+let nightState = "loading";  // Zustand der Nacht-Ansicht bleibt beim Wechsel erhalten
+
+/** Wendet Ansicht + Nacht-Zustand gemeinsam auf das DOM an. */
+function applyView() {
+  const night = currentView === "night";
+  el("state-loading").hidden = !night || nightState !== "loading";
+  el("state-empty").hidden = !night || nightState !== "empty";
+  el("state-error").hidden = !night || nightState !== "error";
+  el("report").hidden = !night || nightState !== "report";
+  el("trends").hidden = night;
+  el("night-date").hidden = !night;
+  el("nav-night").setAttribute("aria-pressed", night ? "true" : "false");
+  el("nav-trends").setAttribute("aria-pressed", night ? "false" : "true");
+  // In der Verlauf-Ansicht weicht die 3D-Szene einem stillen CSS-Himmel
+  // (ihre Anker liegen in der ausgeblendeten Nacht-Ansicht).
+  document.body.classList.toggle("view-trends", !night);
+}
+
 function showState(which) {
-  el("state-loading").hidden = which !== "loading";
-  el("state-empty").hidden = which !== "empty";
-  el("state-error").hidden = which !== "error";
-  el("report").hidden = which !== "report";
+  nightState = which;
+  applyView();
+}
+
+function setView(view) {
+  if (view === currentView) return;
+  currentView = view;
+  applyView();
+  window.scrollTo({ top: 0, behavior: "auto" });
+  if (view === "trends") trendsView.show();
 }
 
 /* ------------------------------------------------------------------------- *
@@ -563,11 +596,11 @@ function renderFrame(report) {
   el("colophon-meta").textContent = parts.join(" · ");
 }
 
-/** Nummeriert die sichtbaren Kapitel neu (I, II, …), falls optionale fehlen. */
+/** Nummeriert die sichtbaren Kapitel der Nacht-Ansicht neu (I, II, …). */
 function renumberChapters() {
   const roman = ["I", "II", "III", "IV", "V", "VI"];
   let i = 0;
-  for (const no of document.querySelectorAll(".chapter:not([hidden]) .chapter-no")) {
+  for (const no of document.querySelectorAll("#report .chapter:not([hidden]) .chapter-no")) {
     no.textContent = roman[i++] ?? "·";
   }
 }
@@ -713,5 +746,7 @@ async function main() {
 }
 
 el("retry-btn").addEventListener("click", () => window.location.reload());
+el("nav-night").addEventListener("click", () => setView("night"));
+el("nav-trends").addEventListener("click", () => setView("trends"));
 
 main();

@@ -42,21 +42,29 @@ EXIT_INTERRUPTED = 130
 # Async-Bootstrap
 # ----------------------------------------------------------------------------
 
-async def main(cfg: AppConfig, *, once: bool = False) -> None:
+async def main(cfg: AppConfig, *, once: bool = False, backfill: int = 0) -> None:
     """
     Hauptschleife der Anwendung.
 
     Baut Store + Pipeline, instanziiert die aktiven Wearable-Adapter und lässt
     sie laufen. Im ``once``-Modus wird pro Adapter genau ein Poll-Zyklus
     verarbeitet und dann beendet; sonst laufen die Adapter im Dauerbetrieb.
+    Ist ``backfill`` > 0, werden stattdessen so viele simulierte Vergangenheits-
+    Nächte erzeugt (für die Verlauf-Ansicht) und die Funktion kehrt zurück.
 
     Args:
         cfg: Die geladene und validierte Anwendungs-Konfiguration.
         once: Wenn ``True``, nur ein einzelner Poll-Zyklus (dann Rückkehr).
+        backfill: Anzahl simulierter Nächte, die statt des Normalbetriebs
+            erzeugt werden (0 = normaler Betrieb).
 
     Seiteneffekte:
         Öffnet den lokalen SleepReport-Store und schreibt Reports hinein.
     """
+    if backfill > 0:
+        await _backfill(cfg, backfill)
+        return
+
     # Lokale Imports halten den reinen Config-/Logging-Pfad importschlank und
     # vermeiden, dass ein Fehler in einem optionalen Modul den Start blockiert.
     from adapters import create_adapters
@@ -153,31 +161,92 @@ async def main(cfg: AppConfig, *, once: bool = False) -> None:
         await store.close()
 
 
+async def _backfill(cfg: AppConfig, nights: int) -> None:
+    """
+    Erzeugt ``nights`` simulierte Vergangenheits-Nächte und speichert je einen Report.
+
+    Praktisch, um die Verlauf-/Trend-Ansicht des Dashboards ohne echte Hardware
+    mit Historie zu füllen (``python main.py --backfill 30``).
+
+    Args:
+        cfg: Anwendungs-Konfiguration (liefert Store-Ziel und Zeitzone).
+        nights: Anzahl der zu erzeugenden Nächte (jeweils die letzten N Tage).
+
+    Seiteneffekte:
+        Schreibt bis zu ``nights`` Reports in den lokalen Store.
+    """
+    from datetime import datetime, time, timedelta, timezone
+
+    from adapters.simulation import SimulationAdapter
+    from database import create_store
+    from ml_pipeline import build_report
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(cfg.system.timezone)
+    except Exception:  # noqa: BLE001 — ohne tzdata (z.B. Windows) auf UTC zurück
+        tz = timezone.utc
+
+    sim = SimulationAdapter({}, cfg.system.timezone)
+    store = create_store(cfg)
+    logger.info("[backfill] Erzeuge %d simulierte Nächte …", nights)
+    saved = 0
+    try:
+        today = datetime.now(tz).date()
+        for day in range(1, nights + 1):
+            night_start = datetime.combine(
+                today - timedelta(days=day), time(hour=23, minute=0), tzinfo=tz
+            )
+            readings = sim.generate_for_date(night_start)
+            report = await build_report(readings, source=sim.name)
+            if report is not None:
+                await store.save_report(report)
+                saved += 1
+    finally:
+        await store.close()
+    logger.info("[backfill] %d Report(s) gespeichert.", saved)
+
+
 # ----------------------------------------------------------------------------
 # CLI-Einstieg
 # ----------------------------------------------------------------------------
 
-def _parse_args(argv: list[str]) -> tuple[Path, bool]:
+def _parse_args(argv: list[str]) -> tuple[Path, bool, int]:
     """
     Wertet die CLI-Argumente aus.
 
-    Unterstützt das Flag ``--once`` (einmaliger Poll) und einen optionalen
+    Unterstützt ``--once`` (einmaliger Poll), ``--backfill N`` (N simulierte
+    Nächte Historie erzeugen, z.B. für die Verlauf-Ansicht) und einen optionalen
     Config-Pfad (erstes Nicht-Flag-Argument).
 
     Args:
         argv: ``sys.argv`` (inkl. Programmname an Index 0).
 
     Returns:
-        Tupel aus Config-Pfad (Default ``config.yaml``) und ``once``-Flag.
+        Tupel aus Config-Pfad (Default ``config.yaml``), ``once``-Flag und
+        ``backfill``-Anzahl (0 = kein Backfill).
     """
     once = False
+    backfill = 0
     config_path = Path("config.yaml")
-    for arg in argv[1:]:
+    args = argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
         if arg in ("--once", "-1"):
             once = True
+        elif arg == "--backfill":
+            i += 1
+            if i < len(args):
+                try:
+                    backfill = max(0, int(args[i]))
+                except ValueError:
+                    backfill = 0
         elif not arg.startswith("-"):
             config_path = Path(arg)
-    return config_path, once
+        i += 1
+    return config_path, once, backfill
 
 
 def _run() -> int:
@@ -187,7 +256,7 @@ def _run() -> int:
     Returns:
         Den Exit-Code, den der Prozess an die Shell zurückgibt.
     """
-    cfg_path, once = _parse_args(sys.argv)
+    cfg_path, once, backfill = _parse_args(sys.argv)
 
     try:
         cfg = load_config(cfg_path)
@@ -200,7 +269,7 @@ def _run() -> int:
     setup_logging(cfg.system.log_level, cfg.system.log_dir)
 
     try:
-        asyncio.run(main(cfg, once=once))
+        asyncio.run(main(cfg, once=once, backfill=backfill))
     except KeyboardInterrupt:
         logger.info("Abbruch durch Benutzer (SIGINT).")
         return EXIT_INTERRUPTED

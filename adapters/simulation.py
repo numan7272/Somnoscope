@@ -110,6 +110,23 @@ class SimulationAdapter(WearableAdapter):
 
         return self._generate_live_sample()
 
+    def generate_for_date(self, night_start: datetime) -> list[WearableReading]:
+        """
+        Erzeugt die Readings einer vollständigen Nacht ab ``night_start``.
+
+        Öffentlicher Wrapper um :meth:`_generate_night` für Backfill/Tests:
+        liefert eine komplette synthetische Nacht (Hypnogramm + Vitalwerte) für
+        ein beliebiges Datum, ohne den ``once``-Zustand von :meth:`poll` zu
+        berühren. Ohne fixen ``seed`` variiert jede Nacht (Seed aus dem Datum).
+
+        Args:
+            night_start: tz-aware Zubettgeh-Zeitpunkt der zu erzeugenden Nacht.
+
+        Returns:
+            Liste von :class:`WearableReading` (Phasen-Segmente + Vitalwerte).
+        """
+        return self._generate_night(night_start)
+
     # -- Nacht-Generierung ---------------------------------------------------
 
     def _generate_night(self, night_start: datetime) -> list[WearableReading]:

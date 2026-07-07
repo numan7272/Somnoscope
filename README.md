@@ -76,8 +76,12 @@ locally, no CDN), with a WebGL fallback, `prefers-reduced-motion` support, and a
 parallel DOM layer for accessibility. The coach card asynchronously loads
 advice from the local LLM coach.
 
+The dashboard has two views (masthead switcher): **Diese Nacht** (the Three.js
+night scene for the latest report) and **Verlauf** (multi-night trends — score
+trend, stage distribution over time, efficiency/HRV, best night & consistency).
+
 API endpoints: `GET /` (dashboard), `GET /api/report/latest`,
-`GET /api/reports?limit=N`, `GET /api/coaching`.
+`GET /api/reports?limit=N`, `GET /api/trends?days=N`, `GET /api/coaching`.
 
 ## Architecture
 
@@ -113,6 +117,9 @@ pip install -r requirements.txt
 
 # Capture one night (simulation adapter, no hardware) and exit:
 python main.py --once
+
+# Seed N simulated past nights (to populate the trends/"Verlauf" view):
+python main.py --backfill 30
 
 # Or run as a continuous tracker daemon:
 python main.py

@@ -24,6 +24,10 @@
     <header class="masthead">
       <p class="wordmark">Somnoscope</p>
       <p class="masthead-role">Schlaf&#8202;·&#8202;Observatorium</p>
+      <nav class="view-nav" aria-label="Ansicht wechseln">
+        <button type="button" id="nav-night" aria-pressed="true">Diese Nacht</button>
+        <button type="button" id="nav-trends" aria-pressed="false">Verlauf</button>
+      </nav>
       <p class="masthead-date" id="night-date"></p>
     </header>
 
@@ -150,6 +154,117 @@
         </section>
 
       </div><!-- /#report -->
+
+      <!-- VERLAUF: ruhige Trend-Ansicht über mehrere Nächte (reines Inline-SVG, kein 3D) -->
+      <div id="trends" hidden>
+
+        <header class="trends-head">
+          <div class="trends-title-block">
+            <h1 class="trends-title">Verlauf</h1>
+            <p class="trends-range" id="trends-range"></p>
+          </div>
+          <div class="range-picker" role="group" aria-label="Zeitraum wählen" id="range-picker">
+            <button type="button" data-days="7"  aria-pressed="false">7&nbsp;Nächte</button>
+            <button type="button" data-days="14" aria-pressed="false">14&nbsp;Nächte</button>
+            <button type="button" data-days="30" aria-pressed="true">30&nbsp;Nächte</button>
+          </div>
+        </header>
+
+        <!-- Ladezustand -->
+        <section id="trends-loading" class="state state-sub" aria-live="polite">
+          <div class="state-moon" aria-hidden="true"></div>
+          <p class="state-msg">Der Verlauf wird geladen&nbsp;…</p>
+        </section>
+
+        <!-- Leeransicht: weniger als zwei Nächte -->
+        <section id="trends-empty" class="state state-sub" hidden aria-labelledby="trends-empty-title">
+          <div class="state-moon" aria-hidden="true"></div>
+          <h2 id="trends-empty-title" class="state-title">Noch zu wenig Historie</h2>
+          <p class="state-msg">Noch zu wenig Historie — erfasse mehr Nächte.</p>
+        </section>
+
+        <!-- Fehlerzustand -->
+        <section id="trends-error" class="state state-sub" hidden aria-labelledby="trends-error-title">
+          <div class="state-moon" aria-hidden="true"></div>
+          <h2 id="trends-error-title" class="state-title">Verbindung unterbrochen</h2>
+          <p class="state-msg">Der Verlauf konnte nicht geladen werden.</p>
+          <button type="button" id="trends-retry" class="retry">Erneut versuchen</button>
+        </section>
+
+        <!-- Trend-Inhalte -->
+        <div id="trends-body" hidden>
+
+          <!-- I · Im Durchschnitt -->
+          <section class="chapter is-visible" aria-labelledby="h-t-avg">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">I</span>
+              <h2 id="h-t-avg">Im Durchschnitt</h2>
+            </header>
+            <ul class="trend-stats" id="trend-stats"></ul>
+          </section>
+
+          <!-- II · Score-Trend -->
+          <section class="chapter is-visible" aria-labelledby="h-t-score">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">II</span>
+              <h2 id="h-t-score">Score im Verlauf</h2>
+            </header>
+            <figure class="tchart">
+              <div class="tchart-plot" id="chart-score" role="img"></div>
+              <figcaption id="chart-score-caption" class="visually-hidden"></figcaption>
+            </figure>
+          </section>
+
+          <!-- III · Phasen über die Nächte -->
+          <section class="chapter is-visible" aria-labelledby="h-t-stages">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">III</span>
+              <h2 id="h-t-stages">Phasen über die Nächte</h2>
+            </header>
+            <figure class="tchart">
+              <div class="tchart-plot" id="chart-stages" role="img"></div>
+              <figcaption id="chart-stages-caption" class="visually-hidden"></figcaption>
+            </figure>
+            <ul class="trend-legend" id="stages-legend"></ul>
+          </section>
+
+          <!-- IV · Effizienz & HRV -->
+          <section class="chapter is-visible" aria-labelledby="h-t-vitals">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">IV</span>
+              <h2 id="h-t-vitals">Effizienz &amp; HRV</h2>
+            </header>
+            <div class="trend-duo">
+              <figure class="tchart">
+                <div class="tchart-head">
+                  <span class="tchart-label" id="label-eff">Schlafeffizienz</span>
+                  <span class="tchart-avg" id="avg-eff"></span>
+                </div>
+                <div class="tchart-plot tchart-plot--small" id="chart-eff" role="img"></div>
+                <figcaption id="chart-eff-caption" class="visually-hidden"></figcaption>
+              </figure>
+              <figure class="tchart">
+                <div class="tchart-head">
+                  <span class="tchart-label" id="label-hrv">HRV</span>
+                  <span class="tchart-avg" id="avg-hrv"></span>
+                </div>
+                <div class="tchart-plot tchart-plot--small" id="chart-hrv" role="img"></div>
+                <figcaption id="chart-hrv-caption" class="visually-hidden"></figcaption>
+              </figure>
+            </div>
+          </section>
+
+          <!-- V · Bilanz -->
+          <section class="chapter is-visible" aria-labelledby="h-t-bilanz">
+            <header class="chapter-head">
+              <span class="chapter-no" aria-hidden="true">V</span>
+              <h2 id="h-t-bilanz">Bilanz</h2>
+            </header>
+            <dl class="ledger" id="trend-ledger"></dl>
+          </section>
+
+        </div><!-- /#trends-body -->
+      </div><!-- /#trends -->
     </main>
 
     <footer class="colophon">

@@ -72,6 +72,8 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 │   ├── report.py           # build_report: Readings → SleepReport-Dict
 │   ├── scorer.py           # compute_sleep_score: Whitebox-Score 0–100
 │   └── preprocessor.py     # stage_raw_eeg: Roh-EEG → Phasen (MNE/YASA-Pfad)
+├── /analytics
+│   └── trends.py           # compute_trends: Mehr-Nächte-Aggregation (Verlauf-View)
 ├── /database
 │   ├── store.py            # SleepStore-Basisklasse (Interface)
 │   ├── sqlite_store.py     # SQLiteStore: Default-Backend, 100 % lokal
@@ -81,8 +83,9 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 │   └── prompt_builder.py   # build_coach_prompt: Report+Historie → LLM-Prompt
 ├── /webui
 │   ├── app.py              # FastAPI-App (`uvicorn webui.app:app`), /api/*-Endpoints
-│   └── static/             # Three.js-Dashboard (index.html, app.js, scene.js,
-│                           #   style.css, vendor/three.module.min.js — offline)
+│   └── static/             # Dashboard: Three.js-Nacht (scene.js) + Verlauf/Trends
+│                           #   (trends.js); index.html/app.js/style.css,
+│                           #   vendor/three.module.min.js — 100 % offline
 ├── /tests                  # pytest-Suite (97 Tests)
 ├── /docs
 │   └── fitbit_air_setup.md # Feature-B-Setup (ghealth-CLI, Cloud-Ausnahme)
