@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Somnoscope, das lokale Schlaf-Observatorium: die letzte Nacht als Nachthimmel, Hypnogramm und Vitalwerte. 100 % offline.">
+  <title>Somnoscope · Schlaf-Observatorium</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <!-- Three.js wird ausschliesslich lokal gevendort geladen (Offline-Prinzip). -->
+  <script type="importmap">
+    { "imports": { "three": "/static/vendor/three.module.min.js" } }
+  </script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+
+  <!-- 3D-Nachthimmel: rein dekorativ, alle Daten stehen parallel im DOM. -->
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <div class="page">
+    <header class="masthead">
+      <p class="wordmark">Somnoscope</p>
+      <p class="masthead-role">Schlaf&#8202;·&#8202;Observatorium</p>
+      <p class="masthead-date" id="night-date"></p>
+    </header>
+
+    <main id="main">
+
+      <!-- Ladezustand -->
+      <section id="state-loading" class="state" aria-live="polite">
+        <div class="state-moon" aria-hidden="true"></div>
+        <p class="state-msg">Die Nacht wird geladen&nbsp;…</p>
+      </section>
+
+      <!-- Leeransicht: noch keine Daten -->
+      <section id="state-empty" class="state" hidden aria-labelledby="empty-title">
+        <div class="state-moon" aria-hidden="true"></div>
+        <h1 id="empty-title" class="state-title">Noch keine Schlafdaten</h1>
+        <p class="state-msg">
+          Das Observatorium ist bereit, aber der Himmel ist noch leer.<br>
+          Starte <code>python main.py</code>, um eine Nacht zu erfassen.
+        </p>
+      </section>
+
+      <!-- Fehlerzustand -->
+      <section id="state-error" class="state" hidden aria-labelledby="error-title">
+        <div class="state-moon" aria-hidden="true"></div>
+        <h1 id="error-title" class="state-title">Verbindung unterbrochen</h1>
+        <p class="state-msg">Die Schlafdaten konnten nicht geladen werden.</p>
+        <button type="button" id="retry-btn" class="retry">Erneut versuchen</button>
+      </section>
+
+      <!-- Report-Ansicht -->
+      <div id="report" hidden>
+
+        <!-- HERO: Score-Orb (3D) + Zahl + Nacht-Spektrum -->
+        <section class="hero" aria-labelledby="score-label">
+          <div class="scene-anchor orb-anchor" data-anchor="orb" aria-hidden="true"></div>
+          <div class="score enter">
+            <p class="score-value"><span id="score-value">–</span></p>
+            <p class="score-label" id="score-label">Schlaf-Score</p>
+            <p class="score-verdict" id="score-verdict"></p>
+          </div>
+          <div class="night-strip enter" id="night-strip">
+            <div class="strip-times">
+              <span id="strip-onset" class="strip-time"></span>
+              <span class="strip-caption">Verlauf der Nacht</span>
+              <span id="strip-wake" class="strip-time"></span>
+            </div>
+            <div class="strip-bar" id="strip-bar" role="img" aria-label=""></div>
+          </div>
+        </section>
+
+        <!-- I · Die Nacht im Verlauf -->
+        <section class="chapter" aria-labelledby="h-verlauf">
+          <header class="chapter-head">
+            <span class="chapter-no" aria-hidden="true">I</span>
+            <h2 id="h-verlauf">Die Nacht im Verlauf</h2>
+          </header>
+          <div class="scene-anchor band-anchor" data-anchor="band" aria-hidden="true"></div>
+          <figure class="hypnogram">
+            <div class="hypno-frame">
+              <div class="hypno-rows" aria-hidden="true">
+                <span>Wach</span><span>REM</span><span>Leicht</span><span>Tief</span>
+              </div>
+              <svg id="hypno-svg" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
+            </div>
+            <div class="hypno-ticks" id="hypno-ticks" aria-hidden="true"></div>
+            <figcaption id="hypno-caption" class="visually-hidden"></figcaption>
+          </figure>
+          <ul class="stage-ledger" id="stage-ledger"></ul>
+        </section>
+
+        <!-- II · Kennzahlen -->
+        <section class="chapter" aria-labelledby="h-kennzahlen">
+          <header class="chapter-head">
+            <span class="chapter-no" aria-hidden="true">II</span>
+            <h2 id="h-kennzahlen">Kennzahlen</h2>
+          </header>
+          <dl class="ledger" id="metrics-ledger"></dl>
+        </section>
+
+        <!-- III · Vitalwerte -->
+        <section class="chapter" id="vitals-section" aria-labelledby="h-vitals">
+          <header class="chapter-head">
+            <span class="chapter-no" aria-hidden="true">III</span>
+            <h2 id="h-vitals">Vitalwerte</h2>
+          </header>
+          <div class="scene-anchor vitals-anchor" data-anchor="vitals" aria-hidden="true"></div>
+          <ul class="vitals" id="vitals-list"></ul>
+        </section>
+
+        <!-- IV · Schlafklima (nur wenn Sensordaten vorliegen) -->
+        <section class="chapter" id="climate-section" hidden aria-labelledby="h-klima">
+          <header class="chapter-head">
+            <span class="chapter-no" aria-hidden="true">IV</span>
+            <h2 id="h-klima">Schlafklima</h2>
+          </header>
+          <dl class="ledger" id="climate-ledger"></dl>
+        </section>
+
+        <!-- V · Letzte Nächte (nur wenn Historie vorliegt) -->
+        <section class="chapter" id="history-section" hidden aria-labelledby="h-history">
+          <header class="chapter-head">
+            <span class="chapter-no" aria-hidden="true">V</span>
+            <h2 id="h-history">Letzte Nächte</h2>
+          </header>
+          <div class="history" id="history-strip" role="img" aria-label=""></div>
+          <div class="history-dates" aria-hidden="true">
+            <span id="history-from"></span><span id="history-to"></span>
+          </div>
+        </section>
+
+      </div><!-- /#report -->
+    </main>
+
+    <footer class="colophon">
+      <p id="colophon-meta"></p>
+      <p class="colophon-claim">100&nbsp;% lokal ausgewertet · keine Cloud</p>
+    </footer>
+  </div>
+
+  <!-- Tooltip für Hypnogramm-Hover (rein visuell, Daten stehen im Text) -->
+  <div id="tooltip" class="tooltip" hidden aria-hidden="true"></div>
+
+  <noscript>
+    <p class="noscript">Dieses Dashboard benötigt JavaScript. Die Daten sind weiterhin unter
+      <code>/api/report/latest</code> abrufbar.</p>
+  </noscript>
+</body>
+</html>

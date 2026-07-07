@@ -40,6 +40,10 @@ from core.constants import (
     METRIC_SKIN_TEMP,
     METRIC_SLEEP_STAGE,
     METRIC_SPO2,
+    STAGE_DEEP,
+    STAGE_LIGHT,
+    STAGE_REM,
+    STAGE_WAKE,
 )
 
 from .base_wearable import WearableAdapter, WearableReading
@@ -66,6 +70,26 @@ _METRIC_UNITS: dict[str, str | None] = {
 #: das Original-Payload ohnehin in ``raw`` behalten.
 _START_KEYS = ("startTime", "start_time", "start", "time", "timestamp")
 _END_KEYS = ("endTime", "end_time", "end")
+
+#: Normalisierung proprietärer Schlafphasen-Namen (Fitbit/Google) auf das
+#: 4-Phasen-Modell des SleepReport-Contracts ({wake, light, deep, rem}).
+#: Unbekannte Werte -> None, damit sie sauber verworfen statt contract-widrig
+#: emittiert werden.
+_STAGE_NAME_MAP: dict[str, str] = {
+    "wake": STAGE_WAKE,
+    "awake": STAGE_WAKE,
+    "wakeup": STAGE_WAKE,
+    "restless": STAGE_WAKE,
+    "asleep": STAGE_LIGHT,
+    "light": STAGE_LIGHT,
+    "core": STAGE_LIGHT,
+    "n1": STAGE_LIGHT,
+    "n2": STAGE_LIGHT,
+    "deep": STAGE_DEEP,
+    "n3": STAGE_DEEP,
+    "sws": STAGE_DEEP,
+    "rem": STAGE_REM,
+}
 
 
 class FitbitGoogleHealthAdapter(WearableAdapter):
@@ -280,6 +304,15 @@ class FitbitGoogleHealthAdapter(WearableAdapter):
                 continue
             end = _parse_dt(_first(dp, _END_KEYS))
             value = self._extract_value(datatype, dp)
+            # Contract: Schlafphasen brauchen Start UND Ende UND eine bekannte
+            # Phase. Unbrauchbare Segmente verwerfen statt contract-widrig senden.
+            if datatype == "sleep" and (end is None or value is None):
+                self._log.debug(
+                    "[%s] Schlafphasen-DataPoint verworfen (Ende/Phase fehlt): %s",
+                    self.name,
+                    dp,
+                )
+                continue
             out.append(
                 WearableReading(
                     source=self.name,
@@ -306,7 +339,9 @@ class FitbitGoogleHealthAdapter(WearableAdapter):
             for key in ("stage", "sleepStage", "level", "type"):
                 val = _deep_get(dp, key)
                 if isinstance(val, str):
-                    return val.lower()
+                    # Proprietären Namen auf {wake,light,deep,rem} normalisieren;
+                    # Unbekanntes -> None (wird in _translate verworfen).
+                    return _STAGE_NAME_MAP.get(val.strip().lower())
             return None
 
         # Numerische Metriken: erst flache, dann verschachtelte Kandidaten.

@@ -30,19 +30,25 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
 from core.constants import (
+    ADAPTER_SIMULATION,
     METRIC_HEART_RATE,
     METRIC_HRV,
     METRIC_SLEEP_STAGE,
     METRIC_SPO2,
+    STAGE_DEEP,
+    STAGE_LIGHT,
+    STAGE_REM,
+    STAGE_WAKE,
 )
 
 from .base_wearable import WearableAdapter, WearableReading
 
-#: Schlafphasen in typischer Zyklus-Reihenfolge.
-_STAGE_WAKE = "wake"
-_STAGE_LIGHT = "light"
-_STAGE_DEEP = "deep"
-_STAGE_REM = "rem"
+#: Schlafphasen — aus core.constants (Single Source of Truth, verhindert Drift
+#: zwischen Simulation und Report-Builder).
+_STAGE_WAKE = STAGE_WAKE
+_STAGE_LIGHT = STAGE_LIGHT
+_STAGE_DEEP = STAGE_DEEP
+_STAGE_REM = STAGE_REM
 
 #: Grober Puls-/HRV-/SpO2-Charakter je Phase: (puls_bpm, hrv_ms, spo2_%).
 _STAGE_VITALS: dict[str, tuple[float, float, float]] = {
@@ -78,7 +84,7 @@ class SimulationAdapter(WearableAdapter):
 
     @property
     def name(self) -> str:
-        return "simulation"
+        return ADAPTER_SIMULATION
 
     @property
     def poll_interval_s(self) -> int:

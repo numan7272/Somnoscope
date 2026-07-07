@@ -13,6 +13,8 @@ Beispiel:
     >>> setup_logging(cfg.system.log_level, cfg.system.log_dir)
 """
 
+from __future__ import annotations
+
 from core.config_loader import (
     AppConfig,
     ClimateSensorsConfig,

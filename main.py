@@ -2,21 +2,22 @@
 Somnoscope — Einstiegspunkt.
 
 Verantwortlichkeiten dieses Skripts:
-    1. ``config.yaml`` über den :func:`core.config_loader.load_config` einlesen.
+    1. ``config.yaml`` über :func:`core.config_loader.load_config` einlesen.
     2. Anwendungsweites Logging über :func:`core.logger.setup_logging` initialisieren.
-    3. Den asynchronen Haupt-Loop starten, der nach und nach die aktivierten
-       Module hochfährt (Wearable, MQTT, ML, DB, LLM-Coach).
-
-Phase 1 implementiert davon nur den Bootstrap — die Module geben aktuell nur
-ihren Status aus und werden in späteren Phasen mit echten Tasks ersetzt.
+    3. Die aktiven Wearable-Adapter hochfahren und ihre Daten über die
+       :class:`core.pipeline.SleepPipeline` zu SleepReports verdichten, die im
+       lokalen Store landen (und damit im Dashboard sichtbar werden).
 
 Ausführung::
 
-    python main.py
-
-Optional kann ein abweichender Config-Pfad übergeben werden::
-
+    python main.py                 # Dauerbetrieb (Tracker-Daemon)
+    python main.py --once          # genau ein Poll-Zyklus (z.B. „letzte Nacht
+                                   # verarbeiten"), dann beenden — ideal für Cron/CI
     python main.py path/to/other-config.yaml
+
+Das Dashboard wird separat gestartet::
+
+    uvicorn webui.app:app          # http://127.0.0.1:8000
 """
 
 from __future__ import annotations
@@ -38,25 +39,56 @@ EXIT_INTERRUPTED = 130
 
 
 # ----------------------------------------------------------------------------
-# Modul-Stubs für Phase 1
+# Async-Bootstrap
 # ----------------------------------------------------------------------------
-# Jeder dieser Coroutines steht für ein späteres Modul. Aktuell loggen sie nur,
-# dass sie gestartet würden, und beenden sich sofort wieder. In Phase 2+ werden
-# sie durch echte Long-Running-Tasks (BLE-Scan, MQTT-Loop, ...) ersetzt.
 
-async def _start_wearable_module(cfg: AppConfig) -> None:
+async def main(cfg: AppConfig, *, once: bool = False) -> None:
     """
-    Fährt alle aktiven Wearable-Adapter hoch und lässt sie laufen (Phase 2).
+    Hauptschleife der Anwendung.
 
-    Die Adapter werden über :func:`adapters.create_adapters` aus der Config
-    instanziiert. Jeder Adapter läuft in seiner eigenen ``run``-Schleife; ein
-    fehlschlagender Adapter reisst die anderen nicht mit (Graceful Degradation).
+    Baut Store + Pipeline, instanziiert die aktiven Wearable-Adapter und lässt
+    sie laufen. Im ``once``-Modus wird pro Adapter genau ein Poll-Zyklus
+    verarbeitet und dann beendet; sonst laufen die Adapter im Dauerbetrieb.
 
-    Der ``sink`` loggt aktuell jeden Messpunkt (Whitebox). Ab Phase 4/5 wird hier
-    der ML-Preprocessor bzw. InfluxDB-Writer angehängt.
+    Args:
+        cfg: Die geladene und validierte Anwendungs-Konfiguration.
+        once: Wenn ``True``, nur ein einzelner Poll-Zyklus (dann Rückkehr).
+
+    Seiteneffekte:
+        Öffnet den lokalen SleepReport-Store und schreibt Reports hinein.
     """
-    # Lokaler Import: hält den Bootstrap importschlank und vermeidet Zyklen.
-    from adapters import WearableReading, create_adapters
+    # Lokale Imports halten den reinen Config-/Logging-Pfad importschlank und
+    # vermeiden, dass ein Fehler in einem optionalen Modul den Start blockiert.
+    from adapters import create_adapters
+    from core.pipeline import SleepPipeline
+    from database import create_store
+
+    enabled = cfg.enabled_modules()
+    disabled = cfg.disabled_modules()
+
+    logger.info("=" * 64)
+    logger.info("Somnoscope — %s", "Einzeldurchlauf" if once else "Dauerbetrieb")
+    logger.info("=" * 64)
+    logger.info("Aktive Module   : %s", ", ".join(enabled) if enabled else "<keine>")
+    logger.info("Inaktive Module : %s", ", ".join(disabled) if disabled else "<keine>")
+    logger.info("Zeitzone        : %s", cfg.system.timezone)
+    logger.info("Daten-Verz.     : %s", cfg.system.data_dir.resolve())
+    logger.info("=" * 64)
+
+    if not cfg.wearable.enabled:
+        logger.warning(
+            "wearable.enabled=false — ohne Wearable liefert das System keine "
+            "Schlafdaten. Aktivieren Sie das Modul in config.yaml."
+        )
+        return
+
+    if cfg.climate_sensors.enabled:
+        logger.info(
+            "[climate_sensors] konfiguriert (broker=%s:%d) — MQTT-Anbindung folgt "
+            "in Phase 3; wird derzeit nicht ausgewertet.",
+            cfg.climate_sensors.broker_host,
+            cfg.climate_sensors.broker_port,
+        )
 
     adapters = create_adapters(cfg)
     if not adapters:
@@ -66,139 +98,52 @@ async def _start_wearable_module(cfg: AppConfig) -> None:
         )
         return
 
-    async def _sink(reading: WearableReading) -> None:
-        logger.info(
-            "[wearable] %s | %s = %s%s @ %s",
-            reading.source,
-            reading.metric,
-            reading.value,
-            f" {reading.unit}" if reading.unit else "",
-            reading.start.isoformat(),
-        )
-
+    store = create_store(cfg)
+    pipeline = SleepPipeline(cfg, store)
     logger.info(
-        "[wearable] %d Adapter aktiv: %s",
+        "[pipeline] %d Adapter aktiv (%s) — Persistenz: %s",
         len(adapters),
         ", ".join(a.name for a in adapters),
-    )
-    await asyncio.gather(*(adapter.run(_sink) for adapter in adapters))
-
-
-async def _start_climate_module(cfg: AppConfig) -> None:
-    """Platzhalter — wird in Phase 3 durch den MQTT-Subscriber ersetzt."""
-    logger.info(
-        "[climate_sensors] Aktiv: broker=%s:%d, %d Topic(s) abonniert",
-        cfg.climate_sensors.broker_host,
-        cfg.climate_sensors.broker_port,
-        len(cfg.climate_sensors.topics),
+        "SQLite (lokal)",
     )
 
-
-async def _start_ml_module(cfg: AppConfig) -> None:
-    """Platzhalter — wird in Phase 4 durch Preprocessor + YASA-Scorer ersetzt."""
-    logger.info(
-        "[ml_pipeline] Aktiv: scorer=%s",
-        cfg.ml_pipeline.scorer.get("backend", "<unbekannt>"),
-    )
-
-
-async def _start_database_module(cfg: AppConfig) -> None:
-    """Platzhalter — wird in Phase 5 durch den InfluxDB-Writer ersetzt."""
-    logger.info(
-        "[database] Aktiv: url=%s, bucket=%s",
-        cfg.database.url,
-        cfg.database.bucket,
-    )
-
-
-async def _start_llm_coach_module(cfg: AppConfig) -> None:
-    """Platzhalter — wird in Phase 6 durch den RAG-Prompt-Builder ersetzt."""
-    logger.info(
-        "[llm_coach] Aktiv: backend=%s, model=%s",
-        cfg.llm_coach.backend,
-        cfg.llm_coach.model or "<nicht gesetzt>",
-    )
-
-
-# Mapping: Modul-Name (wie in config.yaml) -> Startfunktion
-_MODULE_STARTERS = {
-    "wearable": _start_wearable_module,
-    "climate_sensors": _start_climate_module,
-    "ml_pipeline": _start_ml_module,
-    "database": _start_database_module,
-    "llm_coach": _start_llm_coach_module,
-}
-
-
-# ----------------------------------------------------------------------------
-# Async-Bootstrap
-# ----------------------------------------------------------------------------
-
-async def main(cfg: AppConfig) -> None:
-    """
-    Hauptschleife der Anwendung.
-
-    Startet für jedes aktivierte Modul eine asynchrone Task. Inaktive Module
-    werden zur Transparenz im Log aufgeführt, aber nicht angelegt
-    (Graceful Degradation).
-
-    Args:
-        cfg: Die geladene und validierte Anwendungs-Konfiguration.
-    """
-    enabled = cfg.enabled_modules()
-    disabled = cfg.disabled_modules()
-
-    logger.info("=" * 64)
-    logger.info("Somnoscope — Bootstrap (Phase 1)")
-    logger.info("=" * 64)
-    logger.info("Aktive Module   : %s", ", ".join(enabled) if enabled else "<keine>")
-    logger.info(
-        "Inaktive Module : %s", ", ".join(disabled) if disabled else "<keine>"
-    )
-    logger.info("Zeitzone        : %s", cfg.system.timezone)
-    logger.info("Daten-Verz.     : %s", cfg.system.data_dir.resolve())
-    logger.info("=" * 64)
-
-    # Tasks für aktive Module sammeln und parallel starten.
-    tasks: list[asyncio.Task[None]] = []
-    for name in enabled:
-        starter = _MODULE_STARTERS.get(name)
-        if starter is None:
-            logger.warning(
-                "Kein Starter für Modul '%s' registriert — wird übersprungen.", name
-            )
-            continue
-        tasks.append(asyncio.create_task(starter(cfg), name=f"start:{name}"))
-
-    if not tasks:
-        logger.warning(
-            "Keine Module aktiviert. Anwendung beendet sich. "
-            "Aktivieren Sie mindestens 'wearable' in config.yaml."
-        )
-        return
-
-    # Auf alle Starter warten. ``return_exceptions=True`` sorgt dafür, dass
-    # ein fehlschlagendes Modul die anderen nicht mitreisst — passend zum
-    # Graceful-Degradation-Prinzip.
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    for task, result in zip(tasks, results):
-        if isinstance(result, Exception):
-            logger.exception(
-                "Modul-Start '%s' ist fehlgeschlagen: %s", task.get_name(), result
-            )
-
-    logger.info("Bootstrap abgeschlossen — Long-Running-Tasks folgen ab Phase 2.")
+    try:
+        if once:
+            await asyncio.gather(*(pipeline.run_once(a) for a in adapters))
+            logger.info("[pipeline] Einzeldurchlauf abgeschlossen.")
+        else:
+            # Dauerbetrieb: läuft bis Strg-C (KeyboardInterrupt in _run()).
+            await asyncio.gather(*(pipeline.run(a) for a in adapters))
+    finally:
+        await pipeline.aclose()
+        await store.close()
 
 
 # ----------------------------------------------------------------------------
 # CLI-Einstieg
 # ----------------------------------------------------------------------------
 
-def _resolve_config_path(argv: list[str]) -> Path:
-    """Wertet das erste CLI-Argument als Config-Pfad aus (Default: ``config.yaml``)."""
-    if len(argv) > 1:
-        return Path(argv[1])
-    return Path("config.yaml")
+def _parse_args(argv: list[str]) -> tuple[Path, bool]:
+    """
+    Wertet die CLI-Argumente aus.
+
+    Unterstützt das Flag ``--once`` (einmaliger Poll) und einen optionalen
+    Config-Pfad (erstes Nicht-Flag-Argument).
+
+    Args:
+        argv: ``sys.argv`` (inkl. Programmname an Index 0).
+
+    Returns:
+        Tupel aus Config-Pfad (Default ``config.yaml``) und ``once``-Flag.
+    """
+    once = False
+    config_path = Path("config.yaml")
+    for arg in argv[1:]:
+        if arg in ("--once", "-1"):
+            once = True
+        elif not arg.startswith("-"):
+            config_path = Path(arg)
+    return config_path, once
 
 
 def _run() -> int:
@@ -208,7 +153,7 @@ def _run() -> int:
     Returns:
         Den Exit-Code, den der Prozess an die Shell zurückgibt.
     """
-    cfg_path = _resolve_config_path(sys.argv)
+    cfg_path, once = _parse_args(sys.argv)
 
     try:
         cfg = load_config(cfg_path)
@@ -221,7 +166,7 @@ def _run() -> int:
     setup_logging(cfg.system.log_level, cfg.system.log_dir)
 
     try:
-        asyncio.run(main(cfg))
+        asyncio.run(main(cfg, once=once))
     except KeyboardInterrupt:
         logger.info("Abbruch durch Benutzer (SIGINT).")
         return EXIT_INTERRUPTED

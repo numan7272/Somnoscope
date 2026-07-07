@@ -29,9 +29,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-#: Callback, an den ein Adapter jeden Messpunkt übergibt. In Phase 4/5 wird hier
-#: der ML-Preprocessor bzw. InfluxDB-Writer angehängt; aktuell loggt ``main.py``.
+#: Callback, an den ein Adapter jeden einzelnen Messpunkt übergibt (z.B. Logging).
 ReadingSink = Callable[["WearableReading"], Awaitable[None]]
+
+#: Callback für einen kompletten Poll-Batch: (Adapter-Name, Readings). Wird von
+#: :class:`core.pipeline.SleepPipeline` genutzt, um pro Nacht einen Report zu bauen.
+BatchSink = Callable[[str, "list[WearableReading]"], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -126,9 +129,13 @@ class WearableAdapter(ABC):
         """Poll-Intervall in Sekunden (Option ``poll_interval_s``, Default 1800)."""
         return int(self._options.get("poll_interval_s", 1800))
 
-    async def run(self, sink: ReadingSink) -> None:
+    async def run(
+        self,
+        sink: ReadingSink | None = None,
+        on_batch: BatchSink | None = None,
+    ) -> None:
         """
-        Standard-Poll-Schleife: ``open`` → wiederholt ``poll`` → ``sink``.
+        Standard-Poll-Schleife: ``open`` → wiederholt ``poll`` → ``on_batch``/``sink``.
 
         Läuft, bis die Task von aussen abgebrochen wird (``CancelledError``,
         z.B. per Strg-C). Einzelne fehlgeschlagene Polls beenden die Schleife
@@ -136,7 +143,10 @@ class WearableAdapter(ABC):
         versucht (Graceful Degradation, Kernprinzip 2).
 
         Args:
-            sink: Async-Callback, der jeden Messpunkt weiterverarbeitet.
+            sink: Optionaler Async-Callback pro einzelnem Messpunkt (z.B. Logging).
+            on_batch: Optionaler Async-Callback für den kompletten Poll-Batch
+                ``(name, readings)`` — von der Pipeline genutzt, um pro Nacht
+                einen Report zu bauen.
         """
         try:
             await self.open()
@@ -162,8 +172,11 @@ class WearableAdapter(ABC):
                     )
                     readings = []
 
-                for reading in readings:
-                    await sink(reading)
+                if on_batch is not None and readings:
+                    await on_batch(self.name, readings)
+                if sink is not None:
+                    for reading in readings:
+                        await sink(reading)
                 if readings:
                     self._log.info(
                         "[%s] %d Messpunkt(e) verarbeitet.", self.name, len(readings)

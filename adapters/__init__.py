@@ -22,6 +22,7 @@ from core.constants import (
     ADAPTER_EEG_MUSE,
     ADAPTER_FITBIT_BLE,
     ADAPTER_FITBIT_GH_API,
+    ADAPTER_SIMULATION,
 )
 
 from .base_wearable import WearableAdapter, WearableReading
@@ -35,7 +36,7 @@ _REGISTRY: dict[str, tuple[str, str]] = {
     ADAPTER_FITBIT_GH_API: ("adapters.fitbit_gh_api", "FitbitGoogleHealthAdapter"),
     ADAPTER_EEG_MUSE: ("adapters.eeg_muse", "MuseEEGAdapter"),
     # Simulation: Hardware-freie Testquelle, damit das System end-to-end läuft.
-    "simulation": ("adapters.simulation", "SimulationAdapter"),
+    ADAPTER_SIMULATION: ("adapters.simulation", "SimulationAdapter"),
 }
 
 #: Typen, die es (noch) nicht als lokalen Adapter geben kann — mit Begründung.

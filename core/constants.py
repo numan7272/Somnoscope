@@ -31,6 +31,9 @@ ADAPTER_EEG_MUSE = "eeg_muse"
 #: Historischer Platzhalter — NICHT implementierbar (Air-BLE ist verschlüsselt).
 ADAPTER_FITBIT_BLE = "fitbit_ble"
 
+#: Demo/Default — synthetische Schlafdaten ohne Hardware (adapters/simulation.py).
+ADAPTER_SIMULATION = "simulation"
+
 
 # ----------------------------------------------------------------------------
 # Vereinheitlichte Metrik-Namen (Adapter -> WearableReading.metric)
@@ -43,6 +46,20 @@ METRIC_HEART_RATE = "heart_rate"
 METRIC_HRV = "hrv"
 METRIC_SPO2 = "spo2"
 METRIC_SKIN_TEMP = "skin_temp"
+
+
+# ----------------------------------------------------------------------------
+# Schlafphasen-Werte (WearableReading.value bei METRIC_SLEEP_STAGE,
+# sowie Keys in SleepReport["stages_min"] / ["stages_pct"])
+# ----------------------------------------------------------------------------
+
+STAGE_WAKE = "wake"
+STAGE_LIGHT = "light"
+STAGE_DEEP = "deep"
+STAGE_REM = "rem"
+
+#: Alle Phasen in kanonischer Reihenfolge (für Reports und Prompts).
+SLEEP_STAGES: tuple[str, ...] = (STAGE_WAKE, STAGE_LIGHT, STAGE_DEEP, STAGE_REM)
 
 
 # ----------------------------------------------------------------------------

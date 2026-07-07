@@ -112,7 +112,7 @@ database:
 # Machine-Learning-Pipeline (optional in Phase 1, Pflicht ab Phase 4)
 # ----------------------------------------------------------------------------
 ml_pipeline:
-  enabled: false
+  enabled: true
 
   # SciPy-Filter, die vor dem Scoring auf das Biosignal angewendet werden.
   preprocessing:
