@@ -21,6 +21,7 @@
 # Starten:            docker compose up -d --build
 # Mit LLM-Coach:      docker compose --profile ollama up -d
 # Mit InfluxDB:       docker compose --profile influxdb up -d
+# Mit Grafana:        docker compose --profile influxdb --profile grafana up -d
 # Demo-Historie:      docker compose run --rm tracker python main.py --backfill 30
 # ============================================================================
 
@@ -138,6 +139,44 @@ services:
     #   DOCKER_INFLUXDB_INIT_BUCKET: sleep_metrics
     restart: unless-stopped
 
+  # --------------------------------------------------------------------------
+  # OPTIONAL: Grafana als Visualisierung für den InfluxDB-Kanal (Profil "grafana")
+  # --------------------------------------------------------------------------
+  # Aktivieren (sinnvoll zusammen mit dem influxdb-Profil):
+  #   docker compose --profile influxdb --profile grafana up -d
+  # Datasource (InfluxDB/Flux) und das Somnoscope-Dashboard werden automatisch
+  # provisioniert (./docker/grafana/...). Secrets NUR via .env/Umgebung:
+  #   INFLUXDB_TOKEN          → API-Token für die provisionierte Datasource
+  #   GRAFANA_ADMIN_PASSWORD  → Admin-Passwort (Fallback "admin", bitte ändern)
+  grafana:
+    image: grafana/grafana:11.2.0
+    profiles: ["grafana"]
+    ports:
+      # Nur an Loopback binden — Grafana ist ein lokales Analyse-Frontend,
+      # kein LAN-/Internet-Dienst (Privacy-Hinweis im README gilt weiter).
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # An das Datasource-Provisioning durchgereicht (expandiert dort ${...}).
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-}
+      # Keine anonyme Nutzung, keine Registrierung — lokaler Single-User-Betrieb.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      # Grafana-Zustand (Sessions, UI-Einstellungen) persistent halten
+      - grafana-data:/var/lib/grafana
+      # Provisioning: Datasource (InfluxDB/Flux) + Dashboard-Provider, read-only
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Fertige Dashboards (somnoscope.json), vom Provider geladen, read-only
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      influxdb:
+        condition: service_started
+        # required:false → Start klappt auch, wenn nur "--profile grafana"
+        # aktiviert wurde (dann muss InfluxDB anderweitig erreichbar sein).
+        required: false
+    restart: unless-stopped
+
 # ----------------------------------------------------------------------------
 # Named Volumes — Datenpersistenz über Container-Neustarts hinweg
 # ----------------------------------------------------------------------------
@@ -148,3 +187,5 @@ volumes:
   ollama-models:
   # InfluxDB-Daten (nur mit Profil "influxdb" genutzt)
   influxdb-data:
+  # Grafana-Zustand (nur mit Profil "grafana" genutzt)
+  grafana-data:

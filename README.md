@@ -253,6 +253,12 @@ an InfluxDB v2 instance; set `database.enabled: true` and
 `database.url: "http://influxdb:8086"` in `config.yaml` (SQLite remains the
 primary store either way).
 
+**Optional Grafana:** `docker compose --profile influxdb --profile grafana up -d`
+additionally starts Grafana on http://localhost:3000 (login `admin` /
+`GRAFANA_ADMIN_PASSWORD`) with the InfluxDB datasource and a ready-made
+Somnoscope vitals dashboard pre-provisioned — put `INFLUXDB_TOKEN` and
+`GRAFANA_ADMIN_PASSWORD` in your `.env` file, never in the repo.
+
 The privacy notice below applies unchanged: the compose file publishes ports
 8000/1883 on the host — keep them inside your own network or add
 authentication/TLS yourself.
