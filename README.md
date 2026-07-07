@@ -33,7 +33,7 @@ are optional plug-and-play modules.
 | Config-driven modularity (per-module `enabled` flags)   | ✅     | `core/`           |
 | Simulation adapter — synthetic nights, zero hardware    | ✅     | `adapters/`       |
 | Fitbit Air via Google Health API (Feature B, opt-in)    | ✅     | `adapters/`       |
-| Muse EEG adapter slot via BrainFlow (Feature C, opt-in) | ✅     | `adapters/`       |
+| Muse EEG adapter via BrainFlow → YASA (Feature C, opt-in) | ✅     | `adapters/`       |
 | Multi-adapter hybrid operation (`wearable.adapters[]`)  | ✅     | `adapters/`       |
 | Sleep pipeline: adapter → report → store                | ✅     | `core/pipeline.py`|
 | SleepReport builder + whitebox sleep score (0–100)      | ✅     | `ml_pipeline/`    |
@@ -58,10 +58,11 @@ are optional plug-and-play modules.
   by Google's cloud, so a local BLE read (`fitbit_ble`) is technically
   impossible. The adapter is strictly opt-in and clearly logged as a cloud
   source. Setup guide: [docs/fitbit_air_setup.md](docs/fitbit_air_setup.md).
-- **`eeg_muse`** *(Feature C, default: off)* — prepared adapter slot for a Muse
-  EEG headband via BrainFlow. 100 % local raw 4-channel EEG; the concrete
-  BLE/BrainFlow wiring is documented in the module and can be added without any
-  architecture change.
+- **`eeg_muse`** *(Feature C, default: off)* — Muse EEG headband via BrainFlow,
+  staged with YASA (`ml_pipeline.stage_raw_eeg`). 100 % local raw 4-channel EEG:
+  streams over BLE, buffers the night, and emits sleep-stage segments. Fully
+  implemented; enable it with a Muse S/2 and `pip install brainflow numpy mne yasa`.
+  (Staging *quality* needs real hardware to validate.)
 
 Multiple adapters can run simultaneously (hybrid operation) — each entry in
 `wearable.adapters[]` is toggled independently.
@@ -141,7 +142,7 @@ wearable:
       enabled: true
     - type: "fitbit_gh_api"     # Feature B: opt-in cloud exception (see docs)
       enabled: false
-    - type: "eeg_muse"          # Feature C: local EEG slot (BrainFlow)
+    - type: "eeg_muse"          # Feature C: local EEG via BrainFlow → YASA
       enabled: false
 
 climate_sensors:
@@ -185,7 +186,7 @@ badge at the top reflects the current status.
 All six phases are complete:
 
 - [x] Phase 1 — config loader, logger, bootstrap
-- [x] Phase 2 — wearable adapters (simulation, `fitbit_gh_api`, `eeg_muse` slot) via the adapter registry
+- [x] Phase 2 — wearable adapters (simulation, `fitbit_gh_api`, `eeg_muse`) via the adapter registry
 - [x] Phase 3 — MQTT subscriber + climate buffer for ESP32 climate data
 - [x] Phase 4 — ML pipeline: SleepReport builder, sleep score, raw-EEG staging path (MNE/YASA)
 - [x] Phase 5 — persistence (SQLite default, InfluxDB optional) + FastAPI/Three.js dashboard

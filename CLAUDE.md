@@ -64,7 +64,7 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 │   ├── base_wearable.py    # Abstrakte Basisklasse + WearableReading
 │   ├── simulation.py       # Default-Adapter: synthetische Nächte, hardware-frei
 │   ├── fitbit_gh_api.py    # Feature B: Fitbit Air via Google Health API (opt-in)
-│   └── eeg_muse.py         # Feature C: Muse-EEG-Slot via BrainFlow (Stub)
+│   └── eeg_muse.py         # Feature C: Muse-EEG via BrainFlow → YASA (implementiert)
 ├── /iot
 │   ├── mqtt_subscriber.py  # Empfängt CO2/Temp/Luftfeuchte vom ESP32
 │   └── climate_buffer.py   # Ringpuffer → report["climate"]-Mittelwerte
@@ -132,7 +132,8 @@ Alle sechs Phasen sind abgeschlossen — das Projekt ist feature-komplett
 * **Phase 2 ✅:** Wearable-Adapter — `base_wearable.py` + Registry/Factory
   (`adapters/__init__.py`, konfiguriert über `wearable.adapters[]`):
   `simulation` (Default AN, hardware-frei), `fitbit_gh_api` (Feature B, opt-in,
-  sanktionierte Cloud-Ausnahme), `eeg_muse` (Feature C, BrainFlow-Slot, AUS).
+  sanktionierte Cloud-Ausnahme), `eeg_muse` (Feature C, BrainFlow→YASA,
+  implementiert, AUS — braucht Muse-Headband + `pip install brainflow`).
   `fitbit_ble` ist NICHT implementierbar (BLE-Payload verschlüsselt, siehe
   `docs/fitbit_air_setup.md`).
 * **Phase 3 ✅:** IoT-Integration — `iot/mqtt_subscriber.py` + `iot/climate_buffer.py`;

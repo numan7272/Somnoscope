@@ -58,11 +58,14 @@ wearable:
       lookback_days: 2
 
     # --- Optionales Feature C: EEG-Headband (Muse) lokal über BrainFlow -------
-    # ✅ 100 % lokal (erfüllt Kernprinzip 1). Slot vorbereitet, Impl folgt.
+    # ✅ 100 % lokal (erfüllt Kernprinzip 1). Implementiert (BrainFlow → YASA).
+    # Zum Aktivieren: Muse S/2 + `pip install brainflow numpy mne yasa`, enabled: true.
     - type: "eeg_muse"
       enabled: false
-      mac_address: "${ENV:MUSE_MAC}"
-      board: "muse_s"
+      mac_address: "${ENV:MUSE_MAC}"   # optional; leer -> BrainFlow sucht selbst
+      board: "muse_s"                  # "muse_s" oder "muse_2"
+      min_stage_minutes: 30            # Mindest-Signaldauer vor dem ersten Staging
+      poll_interval_s: 1800
 
   # Hinweis: "fitbit_ble" ist NICHT implementierbar — die Air-BLE-Payload ist
   # verschlüsselt und nur über Googles Cloud entschlüsselbar. Siehe docs.
