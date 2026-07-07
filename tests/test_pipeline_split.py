@@ -151,3 +151,38 @@ async def test_pipeline_zwei_naechte_ergeben_zwei_reports() -> None:
         # Effizienz darf NICHT kollabieren (Bug: ~25-30 % bei verschmolzenen Nächten).
         assert report["sleep_efficiency_pct"] >= 60
         assert report["total_sleep_min"] <= 16 * 60
+
+
+@pytest.mark.asyncio
+async def test_pipeline_injiziert_klima() -> None:
+    """Mit ClimateBuffer landen Raumklima-Mittelwerte im Report (Phase 3)."""
+    from iot import ClimateBuffer
+
+    buffer = ClimateBuffer()
+    base = dt.datetime(2026, 7, 5, 23, 30, tzinfo=_TZ)  # innerhalb der Nacht
+    for i in range(5):
+        ts = base + dt.timedelta(minutes=i * 30)
+        buffer.add("co2", 800.0 + i, ts)
+        buffer.add("temperature", 20.0, ts)
+        buffer.add("humidity", 50.0, ts)
+
+    store = _FakeStore()
+    pipeline = SleepPipeline(_cfg(), store, climate_buffer=buffer)
+    await pipeline.run_once(_BatchAdapter(_night(5)))
+
+    assert len(store.saved) == 1
+    climate = store.saved[0]["climate"]
+    assert climate["avg_temp"] == 20.0
+    assert climate["avg_humidity"] == 50.0
+    assert climate["avg_co2"] is not None
+
+
+@pytest.mark.asyncio
+async def test_pipeline_ohne_klimapuffer_bleibt_null() -> None:
+    """Ohne ClimateBuffer bleibt report["climate"] bei Null-Werten."""
+    store = _FakeStore()
+    pipeline = SleepPipeline(_cfg(), store)  # kein climate_buffer
+    await pipeline.run_once(_BatchAdapter(_night(5)))
+
+    climate = store.saved[0]["climate"]
+    assert climate == {"avg_co2": None, "avg_temp": None, "avg_humidity": None}

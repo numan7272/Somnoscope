@@ -82,14 +82,6 @@ async def main(cfg: AppConfig, *, once: bool = False) -> None:
         )
         return
 
-    if cfg.climate_sensors.enabled:
-        logger.info(
-            "[climate_sensors] konfiguriert (broker=%s:%d) — MQTT-Anbindung folgt "
-            "in Phase 3; wird derzeit nicht ausgewertet.",
-            cfg.climate_sensors.broker_host,
-            cfg.climate_sensors.broker_port,
-        )
-
     adapters = create_adapters(cfg)
     if not adapters:
         logger.warning(
@@ -99,12 +91,30 @@ async def main(cfg: AppConfig, *, once: bool = False) -> None:
         return
 
     store = create_store(cfg)
-    pipeline = SleepPipeline(cfg, store)
+
+    # Optionale Klima-Sensorfusion (ESP32 via MQTT): der Puffer geht an die
+    # Pipeline, der Subscriber läuft im Dauerbetrieb als eigene Task.
+    climate_buffer = None
+    subscriber = None
+    if cfg.climate_sensors.enabled:
+        try:
+            from iot import ClimateBuffer, MqttSubscriber
+
+            climate_buffer = ClimateBuffer()
+            subscriber = MqttSubscriber(cfg.climate_sensors, climate_buffer)
+        except Exception:  # noqa: BLE001 — Klima ist optional, darf den Start nicht verhindern
+            logger.exception(
+                "[climate_sensors] Initialisierung fehlgeschlagen — ohne Klima weiter."
+            )
+            climate_buffer = None
+            subscriber = None
+
+    pipeline = SleepPipeline(cfg, store, climate_buffer=climate_buffer)
     logger.info(
-        "[pipeline] %d Adapter aktiv (%s) — Persistenz: %s",
+        "[pipeline] %d Adapter aktiv (%s) — Persistenz: SQLite (lokal), Klima: %s",
         len(adapters),
         ", ".join(a.name for a in adapters),
-        "SQLite (lokal)",
+        "aktiv" if subscriber is not None else "aus",
     )
 
     try:
@@ -112,22 +122,33 @@ async def main(cfg: AppConfig, *, once: bool = False) -> None:
             await asyncio.gather(*(pipeline.run_once(a) for a in adapters))
             logger.info("[pipeline] Einzeldurchlauf abgeschlossen.")
         else:
-            # Dauerbetrieb: läuft bis Strg-C. return_exceptions=True, damit ein
-            # unerwartet sterbender Adapter die anderen nicht mitreisst
-            # (Graceful Degradation) und der Store erst nach allen schliesst.
-            results = await asyncio.gather(
-                *(pipeline.run(a) for a in adapters), return_exceptions=True
-            )
-            for adapter, res in zip(adapters, results):
+            # Dauerbetrieb: läuft bis Strg-C. return_exceptions=True, damit eine
+            # unerwartet sterbende Task die anderen nicht mitreisst (Graceful
+            # Degradation) und der Store erst nach allen schliesst.
+            runners = [pipeline.run(a) for a in adapters]
+            labels = [a.name for a in adapters]
+            if subscriber is not None:
+                logger.info(
+                    "[climate_sensors] MQTT-Subscriber wird gestartet (broker=%s:%d).",
+                    cfg.climate_sensors.broker_host,
+                    cfg.climate_sensors.broker_port,
+                )
+                runners.append(subscriber.run())
+                labels.append("mqtt_subscriber")
+
+            results = await asyncio.gather(*runners, return_exceptions=True)
+            for label, res in zip(labels, results):
                 if isinstance(res, Exception) and not isinstance(
                     res, asyncio.CancelledError
                 ):
                     logger.error(
-                        "[pipeline] Adapter '%s' unerwartet beendet.",
-                        adapter.name,
+                        "[pipeline] Task '%s' unerwartet beendet.",
+                        label,
                         exc_info=res,
                     )
     finally:
+        if subscriber is not None:
+            await subscriber.close()
         await pipeline.aclose()
         await store.close()
 

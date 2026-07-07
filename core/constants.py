@@ -63,6 +63,43 @@ SLEEP_STAGES: tuple[str, ...] = (STAGE_WAKE, STAGE_LIGHT, STAGE_DEEP, STAGE_REM)
 
 
 # ----------------------------------------------------------------------------
+# Klima-Metriken (iot/ — MQTT-Klimasensoren, ESP32)
+# ----------------------------------------------------------------------------
+# Vereinheitlichte Metrik-Namen für Raumklima-Messwerte. Der MQTT-Subscriber
+# übersetzt Topic-Suffixe (z.B. "bedroom/co2" -> "co2") auf genau diese Namen,
+# damit Puffer, Report und InfluxDB-Writer topic-unabhängig bleiben.
+
+METRIC_CO2 = "co2"
+METRIC_TEMPERATURE = "temperature"
+METRIC_HUMIDITY = "humidity"
+
+#: Alle Klima-Metriken in kanonischer Reihenfolge.
+CLIMATE_METRICS: tuple[str, ...] = (METRIC_CO2, METRIC_TEMPERATURE, METRIC_HUMIDITY)
+
+#: Mapping: MQTT-Topic-Suffix (Segment nach dem letzten "/") -> Klima-Metrik.
+#: "temp" ist als gebräuchliche Kurzform zusätzlich erlaubt.
+TOPIC_SUFFIX_TO_METRIC: dict[str, str] = {
+    "co2": METRIC_CO2,
+    "temperature": METRIC_TEMPERATURE,
+    "temp": METRIC_TEMPERATURE,
+    "humidity": METRIC_HUMIDITY,
+}
+
+#: Keys des SleepReport["climate"]-Blocks (siehe ml_pipeline/report.py).
+CLIMATE_KEY_AVG_CO2 = "avg_co2"
+CLIMATE_KEY_AVG_TEMP = "avg_temp"
+CLIMATE_KEY_AVG_HUMIDITY = "avg_humidity"
+
+#: Mapping: Klima-Metrik -> zugehöriger SleepReport["climate"]-Key.
+#: Achtung: "temperature" wird im Report bewusst zu "avg_temp" verkürzt.
+METRIC_TO_CLIMATE_KEY: dict[str, str] = {
+    METRIC_CO2: CLIMATE_KEY_AVG_CO2,
+    METRIC_TEMPERATURE: CLIMATE_KEY_AVG_TEMP,
+    METRIC_HUMIDITY: CLIMATE_KEY_AVG_HUMIDITY,
+}
+
+
+# ----------------------------------------------------------------------------
 # Google Health API — nur für den optionalen fitbit_gh_api-Adapter
 # ----------------------------------------------------------------------------
 

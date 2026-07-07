@@ -18,6 +18,7 @@ reine Live-Vitalwert-Batches ohne Schlafphasen werden übersprungen.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from adapters.base_wearable import WearableReading
@@ -48,9 +49,17 @@ class SleepPipeline:
         wenn ``database.enabled`` gesetzt ist (Graceful bei fehlender Dependency).
     """
 
-    def __init__(self, cfg: AppConfig, store: SleepStore) -> None:
+    def __init__(
+        self,
+        cfg: AppConfig,
+        store: SleepStore,
+        climate_buffer: Any | None = None,
+    ) -> None:
         self._cfg = cfg
         self._store = store
+        #: Optionaler Klima-Puffer (aus dem MQTT-Subscriber); ergänzt die Reports
+        #: um Raumklima-Mittelwerte. ``None`` = keine Klima-Sensoren aktiv.
+        self._climate_buffer = climate_buffer
         #: Fingerprints bereits gecoachter Reports (date, score, total_sleep) —
         #: verhindert wiederholtes LLM-Coaching identischer Nächte im Dauerbetrieb.
         self._coached: set[tuple[Any, Any, Any]] = set()
@@ -146,6 +155,7 @@ class SleepPipeline:
             report = await build_report(night, source=source)
             if report is None:
                 continue
+            self._inject_climate(report)
             await self._store.save_report(report)
             logger.info(
                 "[pipeline] Report gespeichert: %s | Score %s · Effizienz %.0f%% · "
@@ -174,6 +184,33 @@ class SleepPipeline:
             logger.info("[coach] %s", first_line[:200] or "(kein Text)")
         except Exception:  # noqa: BLE001 — Coaching ist optional, nie fatal
             logger.exception("[pipeline] Coaching fehlgeschlagen — übersprungen.")
+
+    def _inject_climate(self, report: dict) -> None:
+        """
+        Ergänzt den Report um Raumklima-Mittelwerte (CO2/Temp/Feuchte) der Nacht.
+
+        Nutzt den optionalen ClimateBuffer (gespeist vom MQTT-Subscriber). Ohne
+        Puffer oder ohne Klimadaten im Nachtfenster bleibt ``report["climate"]``
+        bei seinen Null-Werten.
+
+        Args:
+            report: Der gebaute SleepReport (wird in-place ergänzt).
+        """
+        if self._climate_buffer is None:
+            return
+        onset = _parse_iso(report.get("sleep_onset"))
+        wake = _parse_iso(report.get("final_wake"))
+        if onset is None or wake is None:
+            return
+        try:
+            climate = self._climate_buffer.averages_between(onset, wake)
+        except Exception:  # noqa: BLE001 — Klima darf den Report nie verhindern
+            logger.exception("[pipeline] Klima-Mittelwerte fehlgeschlagen.")
+            return
+        if isinstance(climate, dict):
+            report["climate"] = climate
+            if any(v is not None for v in climate.values()):
+                logger.debug("[pipeline] Klima ergänzt: %s", climate)
 
     def _is_new_report(self, report: dict) -> bool:
         """
@@ -250,3 +287,13 @@ def _split_into_nights(
     for win_start, win_end in windows:
         groups.append([r for r in readings if win_start <= r.start <= win_end])
     return groups
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    """Parst einen ISO-8601-String zu tz-awarem :class:`datetime`; None bei Fehler."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
