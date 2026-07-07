@@ -11,6 +11,13 @@ Sensor-Fusion mit IoT-Geräten zu betreiben und die Daten lokal mit Machine Lear
 1. **Edge AI (Privacy First):** Alle Gesundheitsdaten bleiben lokal. KEINE Cloud-API-Calls für
    Bio-Signale, Schlafdaten oder LLM-Inferenz. Externe Calls sind ausschließlich für
    `pip install` und Github-Operationen erlaubt.
+   * **Sanktionierte Ausnahme (opt-in):** Der optionale Adapter `fitbit_gh_api`
+     (Feature B) ruft die Google Health API auf, weil die Fitbit-Air-BLE-Payload
+     verschlüsselt und *nur* über Googles Cloud lesbar ist — ein lokaler Read ist
+     technisch unmöglich. Dieser Adapter ist **standardmäßig deaktiviert**, klar
+     als Cloud-Quelle geloggt und vom Maintainer bewusst freigegeben. Der lokale
+     Kern (Simulation, Muse-EEG, ML, DB, Coach) bleibt strikt cloud-frei.
+     Siehe `docs/fitbit_air_setup.md`.
 2. **Graceful Degradation (Modularität):** Plug & Play. Wenn kein ESP32-Klimasensor gefunden wird,
    läuft die Schlafanalyse trotzdem nur mit dem Wearable weiter. Alles wird über `config.yaml`
    gesteuert; jedes optionale Modul hat ein `enabled: true/false`.

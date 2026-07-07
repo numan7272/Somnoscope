@@ -45,12 +45,43 @@ EXIT_INTERRUPTED = 130
 # sie durch echte Long-Running-Tasks (BLE-Scan, MQTT-Loop, ...) ersetzt.
 
 async def _start_wearable_module(cfg: AppConfig) -> None:
-    """Platzhalter — wird in Phase 2 durch den BLE-Adapter ersetzt."""
+    """
+    Fährt alle aktiven Wearable-Adapter hoch und lässt sie laufen (Phase 2).
+
+    Die Adapter werden über :func:`adapters.create_adapters` aus der Config
+    instanziiert. Jeder Adapter läuft in seiner eigenen ``run``-Schleife; ein
+    fehlschlagender Adapter reisst die anderen nicht mit (Graceful Degradation).
+
+    Der ``sink`` loggt aktuell jeden Messpunkt (Whitebox). Ab Phase 4/5 wird hier
+    der ML-Preprocessor bzw. InfluxDB-Writer angehängt.
+    """
+    # Lokaler Import: hält den Bootstrap importschlank und vermeidet Zyklen.
+    from adapters import WearableReading, create_adapters
+
+    adapters = create_adapters(cfg)
+    if not adapters:
+        logger.warning(
+            "[wearable] Kein lauffähiger Adapter aktiv — es werden keine "
+            "Schlafdaten erfasst. Siehe config.yaml (wearable.adapters)."
+        )
+        return
+
+    async def _sink(reading: WearableReading) -> None:
+        logger.info(
+            "[wearable] %s | %s = %s%s @ %s",
+            reading.source,
+            reading.metric,
+            reading.value,
+            f" {reading.unit}" if reading.unit else "",
+            reading.start.isoformat(),
+        )
+
     logger.info(
-        "[wearable] Aktiv: device_type=%s, mac=%s (Adapter folgt in Phase 2)",
-        cfg.wearable.device_type,
-        cfg.wearable.mac_address or "<nicht gesetzt>",
+        "[wearable] %d Adapter aktiv: %s",
+        len(adapters),
+        ", ".join(a.name for a in adapters),
     )
+    await asyncio.gather(*(adapter.run(_sink) for adapter in adapters))
 
 
 async def _start_climate_module(cfg: AppConfig) -> None:
