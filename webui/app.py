@@ -13,8 +13,10 @@ schlanke JSON-API über den Report-Store aus :mod:`database`:
     * ``GET /api/reports?limit=N``→ Liste der letzten N Reports (neueste zuerst)
     * ``GET /api/trends?days=N``  → Mehr-Nächte-Trends via
       :func:`analytics.compute_trends` (200 auch bei leerer Historie)
-    * ``GET /api/coaching``       → Coaching-Text des lokalen LLM-Coach zur
-      jüngsten Nacht (404 ``no_data`` wenn leer; in-memory gecacht pro Datum)
+    * ``GET /api/coaching?lang=de|en`` → Coaching-Text des lokalen LLM-Coach
+      zur jüngsten Nacht in der gewählten Sprache (Default ``de``, ungültige
+      Codes fallen auf ``de`` zurück; 404 ``no_data`` wenn leer; in-memory
+      gecacht pro Datum + Sprache)
     * ``GET /api/export/reports.csv?days=N``  → CSV-Download der letzten N
       Nächte via :func:`analytics.export.reports_to_csv` (200 auch ohne Daten)
     * ``GET /api/export/reports.json?days=N`` → JSON-Download der letzten N
@@ -49,9 +51,16 @@ logger = logging.getLogger(__name__)
 #: Absoluter Pfad zum Frontend (index.html, style.css, app.js).
 STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
 
-#: Obergrenze für den in-memory Coaching-Cache (Key: date|generated_at) —
+#: Obergrenze für den in-memory Coaching-Cache (Key: date|generated_at|lang) —
 #: verhindert unbegrenztes Wachstum im Dauerbetrieb (FIFO-Eviction).
 _COACHING_CACHE_MAX = 64
+
+#: Vom Coaching-Endpoint unterstützte Sprachen; alles andere fällt auf
+#: Deutsch zurück (Graceful Degradation statt 422).
+_COACHING_LANGS: frozenset[str] = frozenset({"de", "en"})
+
+#: Default-Sprache des Coaching-Endpoints (rückwärtskompatibel).
+_COACHING_DEFAULT_LANG = "de"
 
 #: Anzeigename der Anwendung im Status-Endpoint (``/api/status``).
 _APP_NAME = "Somnoscope"
@@ -225,7 +234,7 @@ def _create_app() -> "FastAPI":
         application.state.cfg = await asyncio.to_thread(_load_cfg)
         store = await asyncio.to_thread(_open_store)
         application.state.store = store
-        # In-Memory-Cache für Coaching-Texte (Key: report["date"]) plus Lock,
+        # In-Memory-Cache für Coaching-Texte (Key: date|generated_at|lang) plus Lock,
         # damit parallele Requests nicht mehrfach das lokale LLM anwerfen.
         application.state.coaching_cache = {}
         application.state.coaching_lock = asyncio.Lock()
@@ -380,17 +389,23 @@ def _create_app() -> "FastAPI":
         return await asyncio.to_thread(compute_trends, reports)
 
     @application.get("/api/coaching")
-    async def coaching() -> dict[str, Any]:
+    async def coaching(lang: str = Query(default=_COACHING_DEFAULT_LANG)) -> dict[str, Any]:
         """
         Liefert den Coaching-Text des lokalen LLM-Coach zur jüngsten Nacht.
 
         Holt den jüngsten Report plus Historie (30 Nächte) aus dem Store und
         ruft :func:`llm_coach.generate_coaching` (lokales Ollama mit
-        regelbasiertem Fallback, wirft nie). Da die Generierung bei laufendem
-        Ollama einige Sekunden dauern kann, wird das Ergebnis in-memory pro
-        ``report["date"]`` gecacht; wiederholte Aufrufe antworten sofort.
-        Ein ``asyncio.Lock`` verhindert, dass parallele Requests dieselbe
-        Nacht mehrfach generieren.
+        regelbasiertem Fallback, wirft nie) in der gewünschten Sprache. Da
+        die Generierung bei laufendem Ollama einige Sekunden dauern kann,
+        wird das Ergebnis in-memory pro ``report["date"]`` UND Sprache
+        gecacht (sonst würden sich DE/EN-Texte mischen); wiederholte Aufrufe
+        antworten sofort. Ein ``asyncio.Lock`` verhindert, dass parallele
+        Requests dieselbe Nacht mehrfach generieren.
+
+        Args:
+            lang: Gewünschte Sprache des Coaching-Texts (``"de"`` oder
+                ``"en"``); ungültige Werte fallen still auf ``"de"`` zurück
+                (Graceful Degradation statt 422, rückwärtskompatibel).
 
         Returns:
             ``{"enabled": bool, "text": str, "date": str}`` — ``enabled`` ist
@@ -401,6 +416,17 @@ def _create_app() -> "FastAPI":
             HTTPException: ``404`` mit ``{"detail": "no_data"}``, wenn noch
                 kein Report vorliegt oder kein Store verfügbar ist.
         """
+        # Case-insensitiv normalisieren (analog zu llm_coach.normalize_lang),
+        # damit z.B. ?lang=EN nicht faelschlich auf Deutsch faellt.
+        lang = lang.strip().lower() if isinstance(lang, str) else _COACHING_DEFAULT_LANG
+        if lang not in _COACHING_LANGS:
+            logger.debug(
+                "/api/coaching: unbekannter lang-Parameter %r — nutze %r.",
+                lang,
+                _COACHING_DEFAULT_LANG,
+            )
+            lang = _COACHING_DEFAULT_LANG
+
         store = getattr(application.state, "store", None)
         if store is None:
             raise HTTPException(status_code=404, detail="no_data")
@@ -409,9 +435,10 @@ def _create_app() -> "FastAPI":
             raise HTTPException(status_code=404, detail="no_data")
 
         date = str(report.get("date") or "")
-        # Cache-Key enthält generated_at: ein neu gebauter Report (gleiches
-        # Datum, neue Daten) bekommt frisches Coaching statt veraltetem Text.
-        cache_key = f"{date}|{report.get('generated_at') or ''}"
+        # Cache-Key enthält generated_at UND lang: ein neu gebauter Report
+        # (gleiches Datum, neue Daten) bekommt frisches Coaching statt
+        # veraltetem Text, und DE/EN-Texte mischen sich nicht.
+        cache_key = f"{date}|{report.get('generated_at') or ''}|{lang}"
         cache: dict[str, str] = application.state.coaching_cache
         cached = cache.get(cache_key)
         if cached is not None:
@@ -438,7 +465,7 @@ def _create_app() -> "FastAPI":
                 history = await store.list_reports(limit=30)
                 # generate_coaching ist async, nutzt intern asyncio.to_thread
                 # und wirft nie — der Event-Loop bleibt frei.
-                text = await generate_coaching(report, history, cfg)
+                text = await generate_coaching(report, history, cfg, lang)
                 cache[cache_key] = text
                 # Cache begrenzen: ältesten Eintrag (Einfüge-Reihenfolge) werfen.
                 if len(cache) > _COACHING_CACHE_MAX:

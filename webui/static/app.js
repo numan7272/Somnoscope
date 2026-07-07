@@ -21,9 +21,9 @@
  * Zweisprachigkeit (DE/EN): alle sichtbaren Strings laufen über t() aus
  * i18n.js, die Intl-Formatter über getLocale(). Beim Sprachwechsel wird die
  * aktuelle Ansicht aus den zwischengespeicherten Daten neu gerendert —
- * ohne erneutes Fetch. Der Coach-Text aus /api/coaching bleibt vorerst
- * deutsch (der LLM-Prompt ist deutsch); nur die statische Coach-UI ist
- * übersetzt.
+ * ohne erneutes Fetch. Einzige Ausnahme: der Coach-Text aus /api/coaching
+ * wird sprachabhängig (?lang=de|en) NEU geladen, da der Text serverseitig
+ * generiert wird.
  */
 "use strict";
 
@@ -754,16 +754,26 @@ function renderCoachText(container, text) {
 }
 
 /**
- * Lädt /api/coaching und füllt die Coach-Karte. Zeigt während der (u.U.
- * mehrere Sekunden dauernden) lokalen Generierung einen Ladezustand; bei
- * Fehler, deaktiviertem Coach oder leerem Text wird das Kapitel wieder
- * ausgeblendet. Läuft bewusst NACH dem Haupt-Rendering, blockiert nichts.
+ * Lädt /api/coaching in der aktuellen Sprache (?lang=de|en) und füllt die
+ * Coach-Karte. Zeigt während der (u.U. mehrere Sekunden dauernden) lokalen
+ * Generierung einen Ladezustand; bei Fehler, deaktiviertem Coach oder leerem
+ * Text wird das Kapitel wieder ausgeblendet. Läuft bewusst NACH dem
+ * Haupt-Rendering, blockiert nichts. Wird beim Sprachwechsel erneut
+ * aufgerufen (siehe onLangChange), damit der Coach die gewählte Sprache
+ * spricht. Antwortet eine ältere Anfrage nach einem Sprachwechsel, wird sie
+ * verworfen (Sequenz-Guard). Defensiv: fehlt der Coach-Bereich im DOM,
+ * passiert schlicht nichts.
  */
+let coachLoadSeq = 0; // verwirft veraltete Antworten nach Sprachwechsel
+
 async function loadCoaching() {
   const section = el("coach-section");
-  const card = section.querySelector(".coach-card");
+  const card = section?.querySelector(".coach-card");
   const status = el("coach-status");
   const textEl = el("coach-text");
+  if (!section || !card || !status || !textEl) return;
+
+  const seq = ++coachLoadSeq;
 
   // Ladezustand: Kapitel einblenden, Karte als "beschäftigt" markieren.
   section.hidden = false;
@@ -774,10 +784,13 @@ async function loadCoaching() {
 
   let data = null;
   try {
-    data = await fetchJSON("/api/coaching");
+    data = await fetchJSON(`/api/coaching?lang=${encodeURIComponent(getLang())}`);
   } catch (err) {
     console.warn("Somnoscope: Coaching konnte nicht geladen werden.", err);
   }
+
+  // Inzwischen wurde (z.B. per Sprachwechsel) neu geladen → Antwort verwerfen.
+  if (seq !== coachLoadSeq) return;
 
   const text = typeof data?.text === "string" ? data.text.trim() : "";
   if (!data || data.enabled === false || !text) {
@@ -991,7 +1004,9 @@ el("lang-en").addEventListener("click", () => setLang("en"));
 // Sprachwechsel: die AKTUELLE Ansicht aus den zwischengespeicherten Daten neu
 // zeichnen — ohne erneutes Fetch. Die statischen Texte hat setLang() bereits
 // via applyStatic() übersetzt; die Verlauf-Ansicht registriert ihren eigenen
-// Callback in trends.js. Der Coach-Text bleibt bewusst deutsch (LLM-Prompt).
+// Callback in trends.js. Einzige Ausnahme: der Coach-Text wird serverseitig
+// generiert und daher via loadCoaching() in der neuen Sprache NEU geladen
+// (Karte zeigt kurz den Ladezustand, dann den übersetzten Text).
 onLangChange(() => {
   syncLangButtons();
   if (lastReport) {
@@ -1008,6 +1023,9 @@ onLangChange(() => {
     } catch (err) {
       console.error("Somnoscope: Rendering-Fehler beim Sprachwechsel.", err);
     }
+    // Coach in der neuen Sprache nachladen — fire-and-forget wie beim Start;
+    // Fehler und fehlende DOM-Knoten behandelt loadCoaching selbst.
+    loadCoaching();
   }
   if (lastSystemData) {
     try {

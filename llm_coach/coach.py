@@ -8,8 +8,12 @@ Abhängigkeit (httpx/requests) nötig ist. Der blockierende HTTP-Call läuft via
 
 Graceful Degradation (Kernprinzip 2): Ist Ollama nicht erreichbar, das Modell
 nicht geladen oder läuft ein Timeout auf, crasht NICHTS — stattdessen liefert
-:func:`_fallback_summary` eine regelbasierte deutsche Zusammenfassung aus den
+:func:`_fallback_summary` eine regelbasierte Zusammenfassung aus den
 Report-Kennzahlen, damit der Nutzer immer nützlichen Text bekommt.
+
+Zweisprachigkeit (DE/EN): Sowohl der LLM-Prompt als auch der regelbasierte
+Fallback sprechen die über ``lang`` gewählte Sprache (``"de"`` oder ``"en"``,
+Default Deutsch; unbekannte Codes fallen still auf Deutsch zurück).
 
 Privacy (Kernprinzip 1): Es wird ausschliesslich der lokale Ollama-Endpunkt
 angesprochen — niemals eine Cloud.
@@ -26,7 +30,7 @@ from typing import TYPE_CHECKING
 
 from core.constants import STAGE_DEEP, STAGE_REM
 
-from .prompt_builder import build_coach_prompt
+from .prompt_builder import build_coach_prompt, normalize_lang
 
 if TYPE_CHECKING:
     from core.config_loader import AppConfig
@@ -82,9 +86,9 @@ def _call_ollama_blocking(url: str, payload: dict, timeout_s: float) -> str:
     return text.strip()
 
 
-def _fallback_summary(report: dict) -> str:
+def _fallback_summary(report: dict, lang: str = "de") -> str:
     """
-    Regelbasierte deutsche Zusammenfassung als Fallback ohne LLM.
+    Regelbasierte Zusammenfassung als Fallback ohne LLM (DE oder EN).
 
     Bewertet die wichtigsten Kennzahlen (Score, Effizienz, Tiefschlaf-/REM-
     Anteil, Einschlaflatenz, WASO) mit einfachen Schwellwerten und formuliert
@@ -95,10 +99,30 @@ def _fallback_summary(report: dict) -> str:
     Args:
         report: SleepReport-Dict der aktuellen Nacht. Fehlende Felder werden
             toleriert und einfach ausgelassen.
+        lang: Gewünschte Ausgabesprache (``"de"`` oder ``"en"``); unbekannte
+            Codes fallen still auf Deutsch zurück (rückwärtskompatibler
+            Default: ``"de"``).
 
     Returns:
-        Mehrzeiliger deutscher Zusammenfassungstext (keine medizinische
-        Diagnose, nur allgemeine Schlafhygiene-Hinweise).
+        Mehrzeiliger Zusammenfassungstext in der gewählten Sprache (keine
+        medizinische Diagnose, nur allgemeine Schlafhygiene-Hinweise inkl.
+        Disclaimer).
+    """
+    if normalize_lang(lang) == "en":
+        return _fallback_summary_en(report)
+    return _fallback_summary_de(report)
+
+
+def _fallback_summary_de(report: dict) -> str:
+    """
+    Deutsche Fassung der regelbasierten Fallback-Zusammenfassung.
+
+    Args:
+        report: SleepReport-Dict der aktuellen Nacht (fehlende Felder werden
+            toleriert).
+
+    Returns:
+        Mehrzeiliger deutscher Zusammenfassungstext samt Tipps + Disclaimer.
     """
     lines: list[str] = []
     date = report.get("date", "letzte Nacht")
@@ -185,16 +209,117 @@ def _fallback_summary(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _fallback_summary_en(report: dict) -> str:
+    """
+    Englische Fassung der regelbasierten Fallback-Zusammenfassung.
+
+    Vollständige, idiomatische Übersetzung der deutschen Fassung: gleiche
+    Schwellwerte, gleiche Struktur (Gesamteinschätzung, Kennzahlen, Tipps,
+    Diagnose-Disclaimer) — nur eben auf Englisch.
+
+    Args:
+        report: SleepReport-Dict der aktuellen Nacht (fehlende Felder werden
+            toleriert).
+
+    Returns:
+        Mehrzeiliger englischer Zusammenfassungstext samt Tipps + Disclaimer.
+    """
+    lines: list[str] = []
+    date = report.get("date", "last night")
+    score = report.get("sleep_score")
+    total = report.get("total_sleep_min")
+    efficiency = report.get("sleep_efficiency_pct")
+    latency = report.get("sleep_latency_min")
+    waso = report.get("waso_min")
+    stages_pct = report.get("stages_pct") or {}
+
+    # -- Kopfzeile mit Gesamteinschätzung ------------------------------------
+    if isinstance(score, (int, float)):
+        if score >= _SCORE_GOOD:
+            verdict = "a really good night"
+        elif score >= _SCORE_OK:
+            verdict = "a solid night with room for improvement"
+        else:
+            verdict = "a rather restless night"
+        lines.append(
+            f"Sleep summary for {date}: {verdict} "
+            f"(score {score:.0f}/100)."
+        )
+    else:
+        lines.append(f"Sleep summary for {date}.")
+
+    # -- Kennzahlen -----------------------------------------------------------
+    if isinstance(total, (int, float)):
+        hours = total / 60.0
+        lines.append(f"You slept a total of {hours:.1f} hours.")
+    if isinstance(efficiency, (int, float)):
+        if efficiency >= _EFFICIENCY_GOOD_PCT:
+            lines.append(
+                f"Your sleep efficiency of {efficiency:.0f} % is good — you "
+                "used your time in bed effectively."
+            )
+        else:
+            lines.append(
+                f"Your sleep efficiency was {efficiency:.0f} % — part of "
+                "your time in bed was spent awake."
+            )
+
+    # -- Tipps aus Auffälligkeiten --------------------------------------------
+    tips: list[str] = []
+    deep_pct = stages_pct.get(STAGE_DEEP)
+    rem_pct = stages_pct.get(STAGE_REM)
+    if isinstance(deep_pct, (int, float)) and deep_pct < _DEEP_LOW_PCT:
+        tips.append(
+            f"Your deep sleep share was rather low at {deep_pct:.0f} %. "
+            "A cool, dark bedroom and skipping alcohol in the evening can "
+            "help you get more deep sleep."
+        )
+    if isinstance(rem_pct, (int, float)) and rem_pct < _REM_LOW_PCT:
+        tips.append(
+            f"Your REM share was {rem_pct:.0f} %. Regular bedtimes and "
+            "enough total sleep help you pick up more REM phases in the "
+            "morning."
+        )
+    if isinstance(latency, (int, float)) and latency > _LATENCY_HIGH_MIN:
+        tips.append(
+            f"You needed about {latency:.0f} minutes to fall asleep. "
+            "A consistent evening routine without screens in the final hour "
+            "can make falling asleep easier."
+        )
+    if isinstance(waso, (int, float)) and waso > _WASO_HIGH_MIN:
+        tips.append(
+            f"You were awake for about {waso:.0f} minutes during the night. "
+            "Keep the air fresh (ventilate before bed) and avoid caffeine "
+            "in the afternoon."
+        )
+    if not tips:
+        tips.append(
+            "Stick with your current routine — regular times, a cool bedroom "
+            "and little screen time in the evening pay off."
+        )
+
+    lines.append("")
+    lines.append("Tips:")
+    lines.extend(f"- {tip}" for tip in tips[:3])
+    lines.append("")
+    lines.append(
+        "Note: This is an automated summary, not a medical diagnosis. "
+        "If sleep problems persist, please seek medical advice."
+    )
+    return "\n".join(lines)
+
+
 async def generate_coaching(
     report: dict,
     history: list[dict] | None,
     cfg: AppConfig,
+    lang: str = "de",
 ) -> str:
     """
-    Erzeugt einen deutschen Coaching-Text zum übergebenen SleepReport.
+    Erzeugt einen Coaching-Text zum übergebenen SleepReport (DE oder EN).
 
     Baut mit :func:`llm_coach.prompt_builder.build_coach_prompt` einen Prompt
-    und schickt ihn an das LOKALE Ollama
+    in der gewählten Sprache und schickt ihn an das LOKALE Ollama
     (``POST {cfg.llm_coach.ollama_url}/api/generate``, ``stream=false``).
     Der blockierende urllib-Call läuft in ``asyncio.to_thread``. Es wird
     niemals ein Cloud-Dienst angesprochen.
@@ -209,18 +334,22 @@ async def generate_coaching(
         cfg: Geladene App-Konfiguration (``core.config_loader.AppConfig``);
             genutzt werden ``cfg.llm_coach.ollama_url`` und
             ``cfg.llm_coach.model``.
+        lang: Gewünschte Sprache des Coaching-Texts (``"de"`` oder ``"en"``);
+            unbekannte Codes fallen still auf Deutsch zurück
+            (rückwärtskompatibler Default: ``"de"``).
 
     Returns:
         Coaching-Text vom lokalen LLM — oder bei jedem Fehler (Ollama nicht
         erreichbar, Timeout, kaputte Antwort, fehlendes Modell) die
-        regelbasierte Zusammenfassung aus :func:`_fallback_summary`.
-        Es wird nie eine Exception nach aussen geworfen.
+        regelbasierte Zusammenfassung aus :func:`_fallback_summary` in der
+        gewählten Sprache. Es wird nie eine Exception nach aussen geworfen.
     """
+    lang = normalize_lang(lang)
     try:
-        prompt = build_coach_prompt(report, history)
+        prompt = build_coach_prompt(report, history, lang)
     except Exception:  # noqa: BLE001 — Coach darf das System nie reissen
         logger.exception("Prompt-Bau fehlgeschlagen — nutze Fallback-Zusammenfassung.")
-        return _fallback_summary(report)
+        return _fallback_summary(report, lang)
 
     url = f"{cfg.llm_coach.ollama_url.rstrip('/')}/api/generate"
     payload = {
@@ -259,4 +388,4 @@ async def generate_coaching(
     except Exception:  # noqa: BLE001 — letzte Verteidigungslinie
         logger.exception("Unerwarteter Fehler im LLM-Coach — nutze Fallback.")
 
-    return _fallback_summary(report)
+    return _fallback_summary(report, lang)
