@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Somnoscope App-Marke: Mond über Observatoriumskuppel.
+    Eigenständiges SVG in der Dashboard-Palette (Nachthimmel #070a1c,
+    Mondlicht #efe9da, Tiefschlaf-Blau #5b6ee8) — keine externen Referenzen.
+    Maskable-tauglich: Das Motiv liegt vollständig innerhalb der sicheren
+    Zone (Kreis mit Radius ~205 px um die Bildmitte), der Hintergrund füllt
+    die volle Fläche für beliebige Plattform-Masken.
+  -->
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="38%" r="80%">
+      <stop offset="0%" stop-color="#101636"/>
+      <stop offset="60%" stop-color="#0a0f26"/>
+      <stop offset="100%" stop-color="#070a1c"/>
+    </radialGradient>
+    <radialGradient id="moonglow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#efe9da" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#efe9da" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Vollflächiger Nachthimmel (Maskable-Hintergrund) -->
+  <rect width="512" height="512" fill="url(#sky)"/>
+
+  <!-- Sterne (dezent, innerhalb der sicheren Zone) -->
+  <g fill="#e9ecfa">
+    <circle cx="150" cy="128" r="3.5" opacity="0.85"/>
+    <circle cx="356" cy="102" r="2.5" opacity="0.65"/>
+    <circle cx="398" cy="188" r="3"   opacity="0.75"/>
+    <circle cx="112" cy="216" r="2.5" opacity="0.55"/>
+    <circle cx="304" cy="70"  r="2"   opacity="0.5"/>
+    <circle cx="196" cy="80"  r="2"   opacity="0.6"/>
+  </g>
+
+  <!-- Mond: Lichthof + Sichel in warmem Mondlicht -->
+  <circle cx="256" cy="168" r="118" fill="url(#moonglow)"/>
+  <path d="M 292 92
+           A 82 82 0 1 0 292 244
+           A 64 64 0 1 1 292 92 Z"
+        fill="#efe9da"/>
+
+  <!-- Observatorium: Sockel + Kuppel mit Beobachtungsschlitz -->
+  <g>
+    <rect x="176" y="330" width="160" height="66" rx="10" fill="#0d1230" stroke="#5b6ee8" stroke-width="6"/>
+    <path d="M 176 336 A 80 80 0 0 1 336 336 Z" fill="#0d1230" stroke="#5b6ee8" stroke-width="6" stroke-linejoin="round"/>
+    <!-- Schlitz der Kuppel, zum Mond hin geöffnet -->
+    <path d="M 244 262 L 268 262 L 276 336 L 236 336 Z" fill="#5b6ee8"/>
+    <!-- Tür -->
+    <rect x="238" y="356" width="36" height="40" rx="6" fill="#5b6ee8" opacity="0.85"/>
+  </g>
+</svg>

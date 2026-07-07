@@ -1,0 +1,19 @@
+{
+  "name": "Somnoscope",
+  "short_name": "Somnoscope",
+  "description": "Lokales Schlaf-Observatorium — visualisiert deine Nächte als Nachthimmel, Hypnogramm und Vitalwerte. 100 % offline.",
+  "lang": "de",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070a1c",
+  "theme_color": "#070a1c",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

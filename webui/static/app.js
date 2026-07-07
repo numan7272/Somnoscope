@@ -787,5 +787,28 @@ el("nav-trends").addEventListener("click", () => setView("trends"));
 // aria-pressed synchron, bevor dieser Handler den Zustand ausliest.
 el("range-picker").addEventListener("click", () => updateExportLinks());
 
+/* ------------------------------------------------------------------------- *
+ * PWA: Service Worker registrieren (offline-fähige App-Shell)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Registriert den Service Worker (/sw.js, Scope "/") — rein defensiv:
+ * Ohne SW-Support (oder z.B. in unsicheren Kontexten) passiert schlicht
+ * nichts, Fehler bleiben leise in der Konsole. Das Dashboard funktioniert
+ * unverändert auch ganz ohne Service Worker.
+ */
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .catch((err) => console.info("Somnoscope: Service Worker nicht registriert.", err));
+  } catch (err) {
+    console.info("Somnoscope: Service Worker nicht registriert.", err);
+  }
+}
+
 updateExportLinks();
 main();
+// Nach dem Start der App leise registrieren — blockiert nichts.
+window.addEventListener("load", registerServiceWorker);

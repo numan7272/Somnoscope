@@ -80,6 +80,10 @@ The dashboard has two views (masthead switcher): **Diese Nacht** (the Three.js
 night scene for the latest report) and **Verlauf** (multi-night trends — score
 trend, stage distribution over time, efficiency/HRV, best night & consistency).
 
+It's an installable **PWA**: "add to home screen" on mobile, with a service
+worker that caches the app shell so the dashboard opens offline (data still
+comes from your local API).
+
 Your data is yours: export all nights as **CSV** or **JSON** from the dashboard
 footer (or `GET /api/export/reports.csv?days=N` / `.json`).
 

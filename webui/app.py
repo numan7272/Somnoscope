@@ -6,6 +6,9 @@ schlanke JSON-API über den Report-Store aus :mod:`database`:
 
     * ``GET /``                   → ``index.html`` (das Dashboard)
     * ``GET /static/...``         → CSS/JS-Assets
+    * ``GET /sw.js``              → Service Worker (PWA, Scope ``/`` via
+      ``Service-Worker-Allowed``-Header)
+    * ``GET /manifest.webmanifest`` → Web-App-Manifest (installierbare PWA)
     * ``GET /api/report/latest``  → jüngster SleepReport (404 ``no_data`` wenn leer)
     * ``GET /api/reports?limit=N``→ Liste der letzten N Reports (neueste zuerst)
     * ``GET /api/trends?days=N``  → Mehr-Nächte-Trends via
@@ -239,6 +242,40 @@ def _create_app() -> "FastAPI":
             HTML-Dokument.
         """
         return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+
+    @application.get("/sw.js", include_in_schema=False)
+    async def service_worker() -> FileResponse:
+        """
+        Liefert den Service Worker unter Wurzel-Pfad ``/sw.js`` aus (PWA).
+
+        Der SW liegt physisch in ``webui/static/sw.js``, muss aber an der
+        Wurzel registriert werden, damit er den gesamten App-Scope ``/``
+        kontrollieren darf. Der Header ``Service-Worker-Allowed: /``
+        erlaubt dem Browser explizit diesen weiten Scope.
+
+        Returns:
+            :class:`~fastapi.responses.FileResponse` mit
+            ``application/javascript`` und ``Service-Worker-Allowed: /``.
+        """
+        return FileResponse(
+            STATIC_DIR / "sw.js",
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/"},
+        )
+
+    @application.get("/manifest.webmanifest", include_in_schema=False)
+    async def web_manifest() -> FileResponse:
+        """
+        Liefert das PWA-Web-App-Manifest (installierbares Dashboard).
+
+        Returns:
+            :class:`~fastapi.responses.FileResponse` mit
+            ``application/manifest+json``.
+        """
+        return FileResponse(
+            STATIC_DIR / "manifest.webmanifest",
+            media_type="application/manifest+json",
+        )
 
     @application.get("/api/report/latest")
     async def latest_report() -> dict[str, Any]:
