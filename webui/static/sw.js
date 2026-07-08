@@ -17,7 +17,7 @@
 /** Versionierter Cache-Name — bei Shell-Aenderungen hochzaehlen (neue Assets
  *  erfordern einen Bump, damit activate sie sicher praecacht; stale-while-
  *  revalidate aktualisiert nur bereits gecachte Keys). */
-const CACHE_NAME = "somnoscope-shell-v3";
+const CACHE_NAME = "somnoscope-shell-v4";
 
 /** Die App-Shell: alles, was das Dashboard-Geruest offline braucht. */
 const SHELL_ASSETS = [
@@ -27,6 +27,8 @@ const SHELL_ASSETS = [
   "/static/i18n.js",
   "/static/scene.js",
   "/static/trends.js",
+  "/static/onboarding.js",
+  "/static/onboarding.css",
   "/static/vendor/three.module.min.js",
   "/manifest.webmanifest",
   "/static/icon.svg",

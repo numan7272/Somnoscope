@@ -197,7 +197,12 @@ body.no-webgl .orb-anchor::before {
   display: flex;
   align-items: baseline;
   gap: 18px;
-  padding: clamp(18px, 3vh, 30px) var(--gutter);
+  /* Safe-Area: unter der Notch/Statusleiste bleibt der Masthead frei (iOS-PWA,
+     viewport-fit=cover). Fallback 0px, wo env() nicht unterstützt wird. */
+  padding: calc(clamp(18px, 3vh, 30px) + env(safe-area-inset-top, 0px))
+           max(var(--gutter), env(safe-area-inset-right, 0px))
+           clamp(18px, 3vh, 30px)
+           max(var(--gutter), env(safe-area-inset-left, 0px));
 }
 
 .wordmark {
@@ -955,6 +960,13 @@ body.no-webgl .orb-anchor::before {
 
 @media (max-width: 760px) {
   .masthead { flex-wrap: wrap; gap: 8px 14px; }
+  /* Top-Level-Zustände (Laden/Leer/Fehler) unter dem mobil mehrzeiligen,
+     absoluten Masthead: von oben stapeln statt vertikal zentrieren, damit
+     Mond + Titel nie unter die Nav-/Sprach-Pills geraten (Portrait & Landscape). */
+  #state-loading, #state-empty, #state-error {
+    justify-content: flex-start;
+    padding-top: clamp(150px, 24vh, 205px);
+  }
   .masthead-date { flex-basis: 100%; margin-left: 0; text-align: left; }
   .view-nav { margin-left: 0; flex-basis: 100%; align-self: flex-start; width: fit-content; }
   /* Sprach-Umschalter mobil neben/unter dem Ansichten-Umschalter, linksbündig. */
@@ -1313,3 +1325,23 @@ body.no-webgl .orb-anchor::before {
      → mehr Kopf-Raum, damit die Sprach-Pille die Ueberschrift nicht ueberlappt. */
   #system { padding-top: clamp(150px, 25vh, 205px); }
 }
+
+/* --- Touch-Geräte: größere Trefferflächen ---------------------------------- */
+/* Auf Zeigegeräten ohne Feinpräzision (Finger) die primären Pillen auf min.
+   44px Höhe bringen (Apple HIG / Material / WCAG 2.5.5 AAA), ohne die schlanke
+   Optik am Desktop (Maus) anzutasten — pointer:coarse greift nur auf Touch. */
+@media (pointer: coarse) {
+  .view-nav button,
+  .lang-switch button,
+  .range-picker button,
+  .export-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Skip-Link-Ziel: <main tabindex="-1"> bekommt beim Sprung keinen Fokusring
+   (der Fokus dient nur der Tastatur-/Screenreader-Navigation, nicht der Optik). */
+#main:focus { outline: none; }

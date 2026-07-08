@@ -316,7 +316,12 @@ async function showSystem() {
     renderSystemAdapters(data);
     renderSystemData(data);
     lastSystemData = data; // für sprachliches Re-Render merken
-    systemLoaded = true;
+    // Nur als "geladen" sperren, wenn schon Nächte existieren. Bei 0 Nächten
+    // (frische Installation) erneut laden lassen, sobald der Nutzer die
+    // System-Ansicht wieder öffnet — sonst bliebe die Daten-Bilanz bis zum
+    // vollen Reload fälschlich auf "0" stehen, obwohl der Tracker längst schreibt.
+    const nightCount = isNum(data.night_count) ? data.night_count : 0;
+    systemLoaded = nightCount > 0;
     showSystemState("body");
   } catch (err) {
     console.error("Somnoscope: System-Rendering-Fehler.", err);
@@ -950,6 +955,9 @@ async function main() {
   }
 
   if (!report) {
+    // First-Run: 0 Berichte → Onboarding in #state-empty montieren (VOR
+    // showState("empty"), damit der Inhalt beim Einblenden schon steht).
+    window.SomnoscopeOnboarding?.init(0);
     showState("empty");
     bootScene(null);
     return;
@@ -957,6 +965,8 @@ async function main() {
 
   lastReport = report;
   lastHistory = history;
+  // Daten vorhanden → ein evtl. montiertes Onboarding sauber zurückbauen.
+  window.SomnoscopeOnboarding?.init(Math.max(1, history.length));
 
   try {
     renderFrame(report);

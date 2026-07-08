@@ -2,7 +2,8 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- viewport-fit=cover: nutzbare Flaeche bis in die Notch/Safe-Area (iOS-PWA). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <meta name="description" content="Somnoscope, das lokale Schlaf-Observatorium: die letzte Nacht als Nachthimmel, Hypnogramm und Vitalwerte. 100 % offline.">
   <!-- Statische Texte tragen data-i18n/data-i18n-aria; der deutsche Text im Markup bleibt als Fallback ohne JS. -->
@@ -17,10 +18,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="/static/style.css">
+  <!-- First-Run-Onboarding (Empty-State): eigenes Stylesheet, gleiche Design-Tokens. -->
+  <link rel="stylesheet" href="/static/onboarding.css">
   <!-- Three.js wird ausschliesslich lokal gevendort geladen (Offline-Prinzip). -->
   <script type="importmap">
     { "imports": { "three": "/static/vendor/three.module.min.js" } }
   </script>
+  <!-- First-Run-Onboarding: setzt window.SomnoscopeOnboarding, bevor app.js startet. -->
+  <script type="module" src="/static/onboarding.js"></script>
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
@@ -48,7 +53,7 @@
       <p class="masthead-date" id="night-date"></p>
     </header>
 
-    <main id="main">
+    <main id="main" tabindex="-1">
 
       <!-- Ladezustand -->
       <section id="state-loading" class="state" aria-live="polite">

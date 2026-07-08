@@ -566,7 +566,11 @@ export function createTrendsView() {
       let data = cache.get(currentDays);
       if (!data) {
         data = await fetchJSON(`/api/trends?days=${currentDays}`);
-        cache.set(currentDays, data);
+        // Leere Payloads (< 2 Nächte) NICHT cachen: sonst bliebe der Verlauf
+        // nach dem Erfassen weiterer Nächte leer, bis die Seite neu lädt.
+        if (data && isNum(data.n_nights) && data.n_nights >= 2) {
+          cache.set(currentDays, data);
+        }
       }
       lastData = data;
       loadedDays = currentDays;

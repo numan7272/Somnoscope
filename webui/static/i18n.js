@@ -215,6 +215,22 @@ export const MESSAGES = {
     "system.lastScore": "Letzter Score",
     "system.lastScoreNote": "jüngste ausgewertete Nacht",
     "system.of100": "von 100",
+
+    // First-Run-Onboarding (Empty-State) — siehe onboarding.js / onboarding.css.
+    "onboarding.title": "Willkommen im Observatorium",
+    "onboarding.lede": "Das Observatorium ist bereit. Drei Schritte, und deine erste Nacht leuchtet am Himmel.",
+    "onboarding.stepsAria": "Erste Schritte: drei Etappen bis zum ersten Schlafbericht",
+    "onboarding.step1Title": "Datenquelle wählen",
+    "onboarding.step1a": "Der Simulations-Adapter ist ab Werk aktiv, ganz ohne Hardware. Fitbit (Cloud, opt-in) oder Muse-EEG aktivierst du optional in ",
+    "onboarding.step1b": ".",
+    "onboarding.step2Title": "Demo-Historie erzeugen",
+    "onboarding.step2a": "Starte ",
+    "onboarding.step2b": " im Projektordner: 30 synthetische Nächte zum Erkunden.",
+    "onboarding.step3Title": "Dashboard erkunden",
+    "onboarding.step3Text": "Danach neu laden. Score-Orb, Hypnogramm, Verlauf und System-Ansicht warten schon.",
+    "onboarding.refresh": "Nach Nächten suchen",
+    "onboarding.refreshAria": "Seite neu laden und nach neuen Schlafberichten suchen",
+    "onboarding.privacy": "Alle Daten bleiben auf diesem Gerät. 100 % lokal, keine Cloud.",
   },
 
   en: {
@@ -396,6 +412,22 @@ export const MESSAGES = {
     "system.lastScore": "Latest score",
     "system.lastScoreNote": "most recent analyzed night",
     "system.of100": "of 100",
+
+    // First-Run onboarding (empty state) — see onboarding.js / onboarding.css.
+    "onboarding.title": "Welcome to the observatory",
+    "onboarding.lede": "The observatory is ready. Three steps, and your first night will light up the sky.",
+    "onboarding.stepsAria": "Getting started: three steps to your first sleep report",
+    "onboarding.step1Title": "Choose a data source",
+    "onboarding.step1a": "The simulation adapter is on by default, no hardware needed. Optionally enable Fitbit (cloud, opt-in) or Muse EEG in ",
+    "onboarding.step1b": ".",
+    "onboarding.step2Title": "Create a demo history",
+    "onboarding.step2a": "Run ",
+    "onboarding.step2b": " in the project folder: 30 synthetic nights to explore.",
+    "onboarding.step3Title": "Explore the dashboard",
+    "onboarding.step3Text": "Then reload. The score orb, hypnogram, trends and system view are waiting.",
+    "onboarding.refresh": "Check for nights",
+    "onboarding.refreshAria": "Reload the page and look for new sleep reports",
+    "onboarding.privacy": "All data stays on this device. 100% local, no cloud.",
   },
 };
 
