@@ -1,0 +1,199 @@
+/* ==========================================================================
+   Somnoscope · First-Run-Onboarding (Empty State)
+   --------------------------------------------------------------------------
+   Wird von onboarding.js in #state-empty montiert (Klasse .has-onboarding).
+   Spricht exakt die Sprache des Observatoriums: Design-Tokens aus style.css,
+   Glas-Panel wie die Coach-Karte (Hairline + Phasen-Spektrum), römische
+   Schritt-Ziffern in Serif-Kursive wie die Kapitelnummern, Aktions-Pille
+   über die bestehende .retry-Klasse. Keine externen Assets, keine Fonts.
+   Responsiv 375px–Desktop, kein horizontaler Scroll (Kommandos brechen um).
+   ========================================================================== */
+
+/* --- Host: #state-empty im Onboarding-Modus ------------------------------- */
+
+/* Kopf-Raum, damit die zentrierte Komposition nie unter den absoluten
+   Masthead rutscht (mobil bricht er auf mehrere Zeilen um — siehe #trends). */
+#state-empty.has-onboarding {
+  gap: clamp(16px, 2.6vh, 22px);
+  padding: clamp(96px, 14vh, 150px) var(--gutter) clamp(40px, 7vh, 72px);
+}
+
+/* Programmfokus auf der Überschrift braucht keinen Ring: sie ist nicht
+   tabbbar (tabindex="-1"), der Fokus dient nur Screenreader & Lesefluss. */
+#state-empty.has-onboarding .onboarding-title:focus,
+#state-empty.has-onboarding .onboarding-title:focus-visible {
+  outline: none;
+}
+
+/* --- Lede ------------------------------------------------------------------ */
+
+.onboarding-lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(16px, 2.2vw, 19px);
+  line-height: 1.65;
+  color: var(--dim);
+  max-width: 46ch;
+}
+
+/* --- Panel: Glas-Karte in der Sprache der Coach-Karte ---------------------- */
+
+.onboarding-panel {
+  position: relative;
+  width: min(100%, 720px);
+  margin-top: clamp(8px, 1.6vh, 18px);
+  text-align: left;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: rgba(13, 18, 48, 0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: clamp(18px, 4vw, 34px) clamp(18px, 4.5vw, 40px);
+  overflow: hidden; /* Spektrum-Linie sauber an den runden Ecken beschneiden */
+}
+
+/* Feine Phasen-Linie am Kopf — dieselben Farben wie Hypnogramm & Szene. */
+.onboarding-spectrum {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    var(--stage-deep), var(--stage-light), var(--stage-rem), var(--stage-wake));
+  opacity: 0.85;
+}
+
+/* --- Schritte: Hairline-Zeilen mit römischen Ziffern ----------------------- */
+
+.onboarding-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.onboarding-step {
+  display: grid;
+  grid-template-columns: 2.1em 1fr;
+  gap: 0 clamp(10px, 2.4vw, 20px);
+  align-items: baseline;
+  padding: clamp(15px, 2.4vh, 21px) 0;
+}
+
+.onboarding-step + .onboarding-step {
+  border-top: 1px solid var(--hairline);
+}
+
+.onboarding-step:first-child { padding-top: clamp(2px, 0.8vh, 6px); }
+.onboarding-step:last-child  { padding-bottom: clamp(16px, 2.6vh, 24px); }
+
+.onboarding-step-no {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--faint);
+}
+
+.onboarding-step-body { min-width: 0; }
+
+.onboarding-step-title {
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.onboarding-step-text {
+  margin-top: 7px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--dim);
+  max-width: 58ch;
+  overflow-wrap: anywhere; /* Kommandos nie horizontal scrollen lassen */
+}
+
+/* Terminal-Kommando: ein Klick/Tap markiert die ganze Zeile zum Kopieren. */
+.onboarding-step-text code,
+.onboarding-step-alt code {
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+/* Dezente Zusatzzeile unter einem Schritt (z.B. Docker-Variante des Kommandos). */
+.onboarding-step-alt {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--faint);
+  max-width: 58ch;
+  overflow-wrap: anywhere; /* Kommandos nie horizontal scrollen lassen */
+}
+
+/* --- Privacy-Hinweis (stille Fußzeile des Panels, wie .coach-note) --------- */
+
+.onboarding-privacy {
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* --- Aktion: „Nach Nächten suchen“ (erbt die .retry-Pille) ----------------- */
+
+.onboarding-refresh { margin-top: 2px; }
+
+/* --- Entrance-Choreografie -------------------------------------------------
+   Nur solange .onboarding-enter am Host steht (onboarding.js entfernt die
+   Klasse nach dem ersten Einblenden, damit View-Wechsel nicht erneut
+   animieren). Gleiche Kurve wie die .enter-Choreografie des Dashboards. */
+
+#state-empty.onboarding-enter .onboarding-title,
+#state-empty.onboarding-enter .onboarding-lede,
+#state-empty.onboarding-enter .onboarding-panel,
+#state-empty.onboarding-enter .onboarding-refresh {
+  animation: onboarding-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+#state-empty.onboarding-enter .onboarding-lede    { animation-delay: 0.12s; }
+#state-empty.onboarding-enter .onboarding-panel   { animation-delay: 0.26s; }
+#state-empty.onboarding-enter .onboarding-refresh { animation-delay: 0.46s; }
+
+@keyframes onboarding-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- Reduced Motion --------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  #state-empty.onboarding-enter .onboarding-title,
+  #state-empty.onboarding-enter .onboarding-lede,
+  #state-empty.onboarding-enter .onboarding-panel,
+  #state-empty.onboarding-enter .onboarding-refresh {
+    animation: none;
+  }
+}
+
+/* --- Responsive -------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  /* Masthead hat mobil zusätzliche Zeilen (View- + Sprach-Umschalter). */
+  #state-empty.has-onboarding {
+    padding-top: clamp(150px, 22vh, 200px);
+    gap: 14px;
+  }
+
+  #state-empty.has-onboarding .state-moon { width: 72px; }
+
+  .onboarding-step { grid-template-columns: 1.7em 1fr; }
+}
+
+@media (max-width: 480px) {
+  .onboarding-refresh {
+    width: 100%;
+    max-width: 340px;
+  }
+}

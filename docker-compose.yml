@@ -1,0 +1,191 @@
+# ============================================================================
+# Somnoscope — Docker-Compose-Orchestrierung (Compose v2, kein `version:`-Key)
+# ============================================================================
+# Zwei App-Container aus DEMSELBEN Image (siehe Dockerfile):
+#   * web     → FastAPI-Dashboard (uvicorn webui.app:app, Port 8000)
+#   * tracker → Daemon `python main.py` (schreibt SleepReports in SQLite)
+# Beide teilen sich das Named Volume `somnoscope-data` unter /app/data —
+# dort liegt die gemeinsame SQLite-Datenbank (data/somnoscope.db).
+#
+# WICHTIG für den Container-Betrieb — in der lokalen config.yaml setzen:
+#   climate_sensors:
+#     enabled: true                      # nur wenn ESP32-Klimadaten gewünscht
+#     broker_host: "mosquitto"           # Compose-Servicename statt "localhost"
+#   llm_coach:
+#     ollama_url: "http://ollama:11434"  # Compose-Servicename statt localhost
+#   database:                            # nur mit Profil "influxdb" relevant
+#     url: "http://influxdb:8086"
+# Die config.yaml wird read-only in beide App-Container gemountet, Änderungen
+# daran wirken also nach einem `docker compose restart web tracker`.
+#
+# Starten:            docker compose up -d --build
+# Mit LLM-Coach:      docker compose --profile ollama up -d
+# Mit InfluxDB:       docker compose --profile influxdb up -d
+# Mit Grafana:        docker compose --profile influxdb --profile grafana up -d
+# Demo-Historie:      docker compose run --rm tracker python main.py --backfill 30
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # Web-Dashboard — FastAPI + Three.js ("Schlaf-Observatorium")
+  # --------------------------------------------------------------------------
+  web:
+    build: .
+    # Gemeinsames Image-Tag → web + tracker teilen sich EINEN Build
+    # (der tracker referenziert dasselbe Image, statt ein zweites zu bauen).
+    image: somnoscope:local
+    # Subkommando des docker-entrypoint.sh:
+    # "web" → uvicorn webui.app:app --host 0.0.0.0 --port 8000
+    command: web
+    ports:
+      - "8000:8000"                       # Dashboard: http://localhost:8000
+    volumes:
+      # Gemeinsame SQLite-DB (geteilt mit dem tracker-Service)
+      - somnoscope-data:/app/data
+      # Zentrale Steuerungsdatei read-only aus dem Repo-Root
+      - ./config.yaml:/app/config.yaml:ro
+    # Kein depends_on: mosquitto — das Dashboard liest nur SQLite, der
+    # MQTT-Subscriber läuft ausschließlich im tracker-Service.
+    healthcheck:
+      # /api/trends liefert auch bei leerer Historie HTTP 200 → robust als Probe.
+      # python statt curl/wget: im slim-Image ist kein HTTP-CLI installiert.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/trends?days=1', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # Tracker-Daemon — liest Adapter, baut SleepReports, schreibt in SQLite
+  # --------------------------------------------------------------------------
+  tracker:
+    # Dasselbe Image wie `web` (kein zweiter Build).
+    image: somnoscope:local
+    # Subkommando des docker-entrypoint.sh: "tracker" → python main.py
+    command: tracker
+    volumes:
+      # Dasselbe Volume wie `web` → beide sehen dieselbe somnoscope.db
+      - somnoscope-data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      - mosquitto
+    # Der aus dem Dockerfile geerbte HTTP-Healthcheck passt hier NICHT: der
+    # Tracker lauscht auf keinem Port → sonst dauerhaft "unhealthy". Deaktivieren.
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MQTT-Broker — empfängt ESP32-Klimadaten (CO2, Temperatur, Luftfeuchte)
+  # --------------------------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      # 1883 nach außen freigeben, damit der ESP32 aus dem LAN publishen kann.
+      - "1883:1883"
+    volumes:
+      # Eigene Config nötig: Mosquitto 2.x lehnt Remote-Verbindungen ohne
+      # explizite Listener-/Auth-Konfiguration ab.
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      # $$SYS → Compose-Escaping für das Literal "$SYS" (Broker-Statistik-Topic)
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # OPTIONAL: Ollama für den lokalen LLM-Coach (Profil "ollama")
+  # --------------------------------------------------------------------------
+  # Aktivieren:  docker compose --profile ollama up -d
+  # Modell laden (einmalig, entspricht llm_coach.model in config.yaml):
+  #   docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_K_M
+  # Ohne dieses Profil greift der regelbasierte Coach-Fallback — nie Cloud.
+  ollama:
+    image: ollama/ollama
+    profiles: ["ollama"]
+    ports:
+      # Nur an Loopback binden — der Coach spricht Ollama containerintern
+      # über den Servicenamen an; kein LAN-Zugriff nötig.
+      - "127.0.0.1:11434:11434"
+    volumes:
+      # Heruntergeladene Modelle persistent halten (mehrere GB!)
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # OPTIONAL: InfluxDB v2 als zusätzlicher Time-Series-Kanal (Profil "influxdb")
+  # --------------------------------------------------------------------------
+  # Aktivieren:  docker compose --profile influxdb up -d
+  # Danach in config.yaml: database.enabled: true, database.url: "http://influxdb:8086"
+  # und den API-Token als Umgebungsvariable INFLUXDB_TOKEN an den tracker geben.
+  # SQLite bleibt unabhängig davon immer der primäre Store.
+  influxdb:
+    image: influxdb:2
+    profiles: ["influxdb"]
+    ports:
+      # Nur an Loopback binden (Setup-UI/CLI vom Host); kein LAN-Zugriff nötig.
+      - "127.0.0.1:8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    # Erst-Setup bequem per Env (Werte anpassen bzw. via .env setzen):
+    # environment:
+    #   DOCKER_INFLUXDB_INIT_MODE: setup
+    #   DOCKER_INFLUXDB_INIT_USERNAME: somnoscope
+    #   DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:?in .env setzen}
+    #   DOCKER_INFLUXDB_INIT_ORG: somnoscope
+    #   DOCKER_INFLUXDB_INIT_BUCKET: sleep_metrics
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # OPTIONAL: Grafana als Visualisierung für den InfluxDB-Kanal (Profil "grafana")
+  # --------------------------------------------------------------------------
+  # Aktivieren (sinnvoll zusammen mit dem influxdb-Profil):
+  #   docker compose --profile influxdb --profile grafana up -d
+  # Datasource (InfluxDB/Flux) und das Somnoscope-Dashboard werden automatisch
+  # provisioniert (./docker/grafana/...). Secrets NUR via .env/Umgebung:
+  #   INFLUXDB_TOKEN          → API-Token für die provisionierte Datasource
+  #   GRAFANA_ADMIN_PASSWORD  → Admin-Passwort (Fallback "admin", bitte ändern)
+  grafana:
+    image: grafana/grafana:11.2.0
+    profiles: ["grafana"]
+    ports:
+      # Nur an Loopback binden — Grafana ist ein lokales Analyse-Frontend,
+      # kein LAN-/Internet-Dienst (Privacy-Hinweis im README gilt weiter).
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # An das Datasource-Provisioning durchgereicht (expandiert dort ${...}).
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-}
+      # Keine anonyme Nutzung, keine Registrierung — lokaler Single-User-Betrieb.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      # Grafana-Zustand (Sessions, UI-Einstellungen) persistent halten
+      - grafana-data:/var/lib/grafana
+      # Provisioning: Datasource (InfluxDB/Flux) + Dashboard-Provider, read-only
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Fertige Dashboards (somnoscope.json), vom Provider geladen, read-only
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      influxdb:
+        condition: service_started
+        # required:false → Start klappt auch, wenn nur "--profile grafana"
+        # aktiviert wurde (dann muss InfluxDB anderweitig erreichbar sein).
+        required: false
+    restart: unless-stopped
+
+# ----------------------------------------------------------------------------
+# Named Volumes — Datenpersistenz über Container-Neustarts hinweg
+# ----------------------------------------------------------------------------
+volumes:
+  # Gemeinsame SQLite-DB von web + tracker (/app/data/somnoscope.db)
+  somnoscope-data:
+  # Ollama-Modell-Cache (nur mit Profil "ollama" genutzt)
+  ollama-models:
+  # InfluxDB-Daten (nur mit Profil "influxdb" genutzt)
+  influxdb-data:
+  # Grafana-Zustand (nur mit Profil "grafana" genutzt)
+  grafana-data:

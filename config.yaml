@@ -29,24 +29,46 @@ system:
 
 
 # ----------------------------------------------------------------------------
-# Wearable (Pflicht-Modul: ohne mindestens ein Wearable macht das System keinen Sinn)
+# Wearable (Pflicht-Modul) — jetzt mit mehreren, unabhängig schaltbaren Adaptern.
 # ----------------------------------------------------------------------------
+# Jeder Eintrag unter `adapters` hat `type` + `enabled` + adapter-spezifische
+# Optionen. Mehrere dürfen gleichzeitig aktiv sein (Hybrid-Betrieb).
 wearable:
   enabled: true
 
-  # Welcher Adapter aus /adapters wird verwendet?
-  # Aktuell vorgesehen: "fitbit_ble", "apple_watch_udp"
-  device_type: "fitbit_ble"
+  adapters:
+    # --- Demo/Default: synthetische Schlafdaten, keine Hardware nötig ---------
+    # Läuft sofort out-of-the-box (für Entwicklung, CI, Dashboard, QA).
+    - type: "simulation"
+      enabled: true
+      mode: "once"            # "once" = 1 volle Nacht + Live-Vitals | "replay"
+      sleep_duration_h: 8.0
+      bedtime: "23:00"
+      poll_interval_s: 60
 
-  # MAC-Adresse des BLE-Geräts. Wird beim BLE-Scan zur Auswahl genutzt.
-  # Auf Linux/Windows im Format "AA:BB:CC:DD:EE:FF", auf macOS UUID.
-  mac_address: "AA:BB:CC:DD:EE:FF"
+    # --- Optionales Feature B: Fitbit Air über die Google Health API ----------
+    # ⚠️ BRICHT KERNPRINZIP 1 (Cloud-Call für Bio-Signale) — bewusst opt-in.
+    # Voraussetzung: `ghealth`-CLI installiert + einmal `ghealth setup`.
+    # Details: docs/fitbit_air_setup.md
+    - type: "fitbit_gh_api"
+      enabled: false
+      ghealth_bin: "ghealth"
+      metrics: ["sleep", "heart-rate", "heart-rate-variability", "oxygen-saturation"]
+      poll_interval_s: 1800
+      lookback_days: 2
 
-  # Intervall in Sekunden zwischen Reconnect-Versuchen bei Verbindungsabbruch.
-  reconnect_interval_s: 30
+    # --- Optionales Feature C: EEG-Headband (Muse) lokal über BrainFlow -------
+    # ✅ 100 % lokal (erfüllt Kernprinzip 1). Implementiert (BrainFlow → YASA).
+    # Zum Aktivieren: Muse S/2 + `pip install brainflow numpy mne yasa`, enabled: true.
+    - type: "eeg_muse"
+      enabled: false
+      mac_address: "${ENV:MUSE_MAC}"   # optional; leer -> BrainFlow sucht selbst
+      board: "muse_s"                  # "muse_s" oder "muse_2"
+      min_stage_minutes: 30            # Mindest-Signaldauer vor dem ersten Staging
+      poll_interval_s: 1800
 
-  # Maximaler Scan-Timeout pro Versuch (Sekunden).
-  scan_timeout_s: 15
+  # Hinweis: "fitbit_ble" ist NICHT implementierbar — die Air-BLE-Payload ist
+  # verschlüsselt und nur über Googles Cloud entschlüsselbar. Siehe docs.
 
 
 # ----------------------------------------------------------------------------
@@ -92,7 +114,7 @@ database:
 # Machine-Learning-Pipeline (optional in Phase 1, Pflicht ab Phase 4)
 # ----------------------------------------------------------------------------
 ml_pipeline:
-  enabled: false
+  enabled: true
 
   # SciPy-Filter, die vor dem Scoring auf das Biosignal angewendet werden.
   preprocessing:
@@ -111,7 +133,9 @@ ml_pipeline:
 # Lokaler LLM-Coach (optional — Phase 6)
 # ----------------------------------------------------------------------------
 llm_coach:
-  enabled: false
+  # An: zeigt die Coach-Karte im Dashboard. Ohne laufendes Ollama kommt eine
+  # regelbasierte deutsche Zusammenfassung (Graceful Fallback) — nie Cloud.
+  enabled: true
 
   # Backend: "ollama" oder "llama_cpp"
   backend: "ollama"

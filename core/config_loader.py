@@ -57,14 +57,39 @@ class SystemConfig:
 
 
 @dataclass(frozen=True)
+class WearableAdapterConfig:
+    """
+    Konfiguration *eines* Wearable-Adapters (ein Eintrag unter
+    ``wearable.adapters`` in der config.yaml).
+
+    Attributes:
+        type: Adapter-Typ (siehe ``ADAPTER_*`` in :mod:`core.constants`), z.B.
+            ``"fitbit_gh_api"`` oder ``"eeg_muse"``.
+        enabled: Ob dieser Adapter beim Start hochgefahren wird.
+        options: Adapter-spezifische Restfelder (alles ausser ``type``/``enabled``),
+            z.B. ``ghealth_bin``, ``mac_address``, ``poll_interval_s``.
+    """
+
+    type: str
+    enabled: bool
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class WearableConfig:
-    """Konfiguration des BLE-Wearables. Pflicht-Modul."""
+    """
+    Wearable-Modul: hält eine Liste von Adaptern (Plug & Play, Kernprinzip 4).
+
+    Mehrere Adapter dürfen gleichzeitig aktiv sein (z.B. EEG-Headband +
+    Fitbit-Air-Vergleichsquelle → Hybrid-Betrieb).
+    """
 
     enabled: bool
-    device_type: str
-    mac_address: str
-    reconnect_interval_s: int
-    scan_timeout_s: int
+    adapters: tuple[WearableAdapterConfig, ...] = ()
+
+    def active_adapters(self) -> list[WearableAdapterConfig]:
+        """Gibt nur die Adapter mit ``enabled: true`` zurück."""
+        return [a for a in self.adapters if a.enabled]
 
 
 @dataclass(frozen=True)
@@ -257,14 +282,54 @@ def _build_system(block: dict[str, Any]) -> SystemConfig:
 
 
 def _build_wearable(block: dict[str, Any]) -> WearableConfig:
-    """Pflicht-Modul. ``enabled`` und ``device_type`` sind erforderlich."""
-    return WearableConfig(
-        enabled=bool(block["enabled"]),
-        device_type=str(block["device_type"]),
-        mac_address=str(block.get("mac_address", "")),
-        reconnect_interval_s=int(block.get("reconnect_interval_s", 30)),
-        scan_timeout_s=int(block.get("scan_timeout_s", 15)),
-    )
+    """
+    Baut die :class:`WearableConfig` aus dem ``wearable``-Block.
+
+    Unterstützt zwei Schreibweisen:
+        * **Neu (bevorzugt):** ``wearable.adapters`` als Liste von
+          ``{type, enabled, ...}``-Einträgen (Multi-Adapter / Hybrid).
+        * **Alt (Backward-Compat):** ein einzelnes ``device_type`` direkt im
+          ``wearable``-Block wird in genau einen Adapter überführt.
+
+    Raises:
+        ValueError: Bei fehlerhafter Struktur (kein Mapping, fehlendes ``type``).
+    """
+    enabled = bool(block["enabled"])
+    adapters_raw = block.get("adapters")
+    adapters: list[WearableAdapterConfig] = []
+
+    if adapters_raw is not None:
+        if not isinstance(adapters_raw, list):
+            raise ValueError("wearable.adapters muss eine Liste sein.")
+        for i, entry in enumerate(adapters_raw):
+            if not isinstance(entry, dict):
+                raise ValueError(f"wearable.adapters[{i}] muss ein Mapping sein.")
+            if "type" not in entry:
+                raise ValueError(f"wearable.adapters[{i}] braucht ein 'type'-Feld.")
+            options = {
+                k: v for k, v in entry.items() if k not in ("type", "enabled")
+            }
+            adapters.append(
+                WearableAdapterConfig(
+                    type=str(entry["type"]),
+                    enabled=bool(entry.get("enabled", False)),
+                    options=options,
+                )
+            )
+    elif "device_type" in block:
+        # Altes Einzelgerät-Schema -> ein Adapter.
+        options = {
+            k: v
+            for k, v in block.items()
+            if k not in ("enabled", "device_type", "adapters")
+        }
+        adapters.append(
+            WearableAdapterConfig(
+                type=str(block["device_type"]), enabled=enabled, options=options
+            )
+        )
+
+    return WearableConfig(enabled=enabled, adapters=tuple(adapters))
 
 
 def _build_climate(block: dict[str, Any]) -> ClimateSensorsConfig:
@@ -356,4 +421,10 @@ def _validate_semantics(cfg: AppConfig) -> None:
         logger.warning(
             "wearable.enabled=false — ohne Wearable liefert das System keine "
             "Schlafdaten. Aktivieren Sie das Modul in config.yaml."
+        )
+    elif not cfg.wearable.active_adapters():
+        logger.warning(
+            "wearable.enabled=true, aber kein Adapter mit 'enabled: true'. "
+            "Aktivieren Sie mindestens einen Adapter unter wearable.adapters "
+            "(z.B. 'simulation' für einen Hardware-freien Testlauf)."
         )

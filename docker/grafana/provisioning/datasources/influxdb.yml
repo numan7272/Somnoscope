@@ -1,0 +1,29 @@
+# ============================================================================
+# Grafana Datasource-Provisioning — InfluxDB v2 (Flux)
+# ============================================================================
+# Wird beim Grafana-Start automatisch eingelesen (Profil "grafana" in
+# docker-compose.yml). Der API-Token kommt AUSSCHLIESSLICH aus der
+# Umgebungsvariable INFLUXDB_TOKEN (via .env) — niemals hartkodieren.
+#
+# Passt zu config.yaml (database-Block): org "somnoscope", bucket
+# "sleep_metrics", URL über den Compose-Servicenamen "influxdb".
+# ============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB (Somnoscope)
+    uid: somnoscope-influxdb
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: somnoscope
+      defaultBucket: sleep_metrics
+      tlsSkipVerify: true
+    secureJsonData:
+      # Grafana expandiert ${...} beim Provisioning aus der Container-Umgebung.
+      token: ${INFLUXDB_TOKEN}
+    editable: false

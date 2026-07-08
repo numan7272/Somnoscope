@@ -22,6 +22,19 @@ scipy>=1.11.0                # Filter, Spektralanalyse
 mne>=1.6.0                   # EDF I/O und Biosignal-Strukturen
 yasa>=0.6.4                  # Sleep-Scoring auf EDF-Daten
 
+# --- Web-Dashboard (Phase 5, responsive UI für Handy + Desktop) ---
+fastapi>=0.110.0            # HTTP-API für das Dashboard
+uvicorn>=0.29.0             # ASGI-Server (lokal, `uvicorn webui.app:app`)
+
 # --- Optional in späteren Phasen, hier vorbereitet ---
-# ollama>=0.1.7              # Wird in Phase 6 aktiviert
+# ollama>=0.1.7              # Wird in Phase 6 aktiviert (LLM-Coach)
 # llama-cpp-python>=0.2.0    # Alternative zu ollama, in Phase 6
+# brainflow>=5.10.0          # Feature C: Muse-EEG lokal (adapters/eeg_muse.py)
+
+# --- Externe Tools (kein pip-Paket) ---
+# ghealth-CLI                # Feature B (Fitbit Air via Google Health API).
+#                            # github.com/Google-Health-API/google-health-cli
+#                            # Nur nötig, wenn adapters.fitbit_gh_api aktiv ist.
+
+# --- Nur für Entwicklung/Tests (siehe requirements-dev.txt) ---
+# pytest>=8.0.0
