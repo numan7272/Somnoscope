@@ -113,9 +113,20 @@
 }
 
 /* Terminal-Kommando: ein Klick/Tap markiert die ganze Zeile zum Kopieren. */
-.onboarding-step-text code {
+.onboarding-step-text code,
+.onboarding-step-alt code {
   user-select: all;
   -webkit-user-select: all;
+}
+
+/* Dezente Zusatzzeile unter einem Schritt (z.B. Docker-Variante des Kommandos). */
+.onboarding-step-alt {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--faint);
+  max-width: 58ch;
+  overflow-wrap: anywhere; /* Kommandos nie horizontal scrollen lassen */
 }
 
 /* --- Privacy-Hinweis (stille Fußzeile des Panels, wie .coach-note) --------- */

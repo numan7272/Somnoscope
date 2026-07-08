@@ -41,6 +41,8 @@ const TITLE_ID = "empty-title";
 
 /** Bewusst unübersetzte, technische Bezeichner (Kommandos/Dateien). */
 const CMD_BACKFILL = "python main.py --backfill 30";
+/** Docker-Self-Hosting-Variante desselben Kommandos (docker-compose.yml). */
+const CMD_BACKFILL_DOCKER = "docker compose run --rm tracker python main.py --backfill 30";
 const FILE_CONFIG = "config.yaml";
 
 /**
@@ -59,6 +61,7 @@ const FALLBACK = {
     "onboarding.step2Title": "Demo-Historie erzeugen",
     "onboarding.step2a": "Starte ",
     "onboarding.step2b": " im Projektordner: 30 synthetische Nächte zum Erkunden.",
+    "onboarding.step2Docker": "Im Docker-Setup: ",
     "onboarding.step3Title": "Dashboard erkunden",
     "onboarding.step3Text": "Danach neu laden. Score-Orb, Hypnogramm, Verlauf und System-Ansicht warten schon.",
     "onboarding.refresh": "Nach Nächten suchen",
@@ -75,6 +78,7 @@ const FALLBACK = {
     "onboarding.step2Title": "Create a demo history",
     "onboarding.step2a": "Run ",
     "onboarding.step2b": " in the project folder: 30 synthetic nights to explore.",
+    "onboarding.step2Docker": "In the Docker setup: ",
     "onboarding.step3Title": "Explore the dashboard",
     "onboarding.step3Text": "Then reload. The score orb, hypnogram, trends and system view are waiting.",
     "onboarding.refresh": "Check for nights",
@@ -149,11 +153,26 @@ function prefersReducedMotion() {
   }
 }
 
+/** Füllt einen Absatz aus Teilen: { key } (übersetzbarer Span) oder { code }. */
+function fillParts(p, parts) {
+  for (const part of parts) {
+    if (part.code) {
+      const code = document.createElement("code");
+      code.textContent = part.code;
+      p.appendChild(code);
+    } else {
+      p.appendChild(bind(document.createElement("span"), part.key));
+    }
+  }
+}
+
 /**
  * Ein Schritt der Anleitung: römische Ziffer (dekorativ) + Titel + Text.
  * parts: Liste aus { key } (übersetzbarer Span) oder { code } (Monospace).
+ * altParts (optional): dezente Zusatzzeile, z.B. die Docker-Variante
+ * eines Kommandos (.onboarding-step-alt).
  */
-function makeStep(roman, titleKey, parts) {
+function makeStep(roman, titleKey, parts, altParts = null) {
   const li = document.createElement("li");
   li.className = "onboarding-step";
 
@@ -171,17 +190,15 @@ function makeStep(roman, titleKey, parts) {
 
   const text = document.createElement("p");
   text.className = "onboarding-step-text";
-  for (const part of parts) {
-    if (part.code) {
-      const code = document.createElement("code");
-      code.textContent = part.code;
-      text.appendChild(code);
-    } else {
-      text.appendChild(bind(document.createElement("span"), part.key));
-    }
-  }
+  fillParts(text, parts);
 
   body.append(title, text);
+  if (Array.isArray(altParts) && altParts.length) {
+    const alt = document.createElement("p");
+    alt.className = "onboarding-step-alt";
+    fillParts(alt, altParts);
+    body.appendChild(alt);
+  }
   li.append(no, body);
   return li;
 }
@@ -235,6 +252,9 @@ function mount() {
     ]),
     makeStep("II", "onboarding.step2Title", [
       { key: "onboarding.step2a" }, { code: CMD_BACKFILL }, { key: "onboarding.step2b" },
+    ], [
+      // Docker-Self-Hosting: dort läuft der Backfill im tracker-Container.
+      { key: "onboarding.step2Docker" }, { code: CMD_BACKFILL_DOCKER },
     ]),
     makeStep("III", "onboarding.step3Title", [
       { key: "onboarding.step3Text" },

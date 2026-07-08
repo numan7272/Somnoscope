@@ -42,7 +42,11 @@ const STAGES = [
 ];
 const STAGE_BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
-const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/* prefers-reduced-motion LIVE verfolgen: das MediaQueryList-Objekt bleibt
+ * erhalten, damit ein Umschalten der OS-Einstellung bei offenem Dashboard
+ * sofort greift (change-Listener siehe unten, nach bootScene). */
+const REDUCED_MOTION_MQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+let REDUCED_MOTION = REDUCED_MOTION_MQ.matches;
 
 /* ------------------------------------------------------------------------- *
  * Format-Helfer (sprachabhängig via getLocale(), defensiv)
@@ -178,6 +182,18 @@ function updateExportLinks() {
   json.href = `/api/export/reports.json${query}`;
   csv.setAttribute("aria-label", t("export.ariaCsv", { scope }));
   json.setAttribute("aria-label", t("export.ariaJson", { scope }));
+}
+
+/**
+ * Blendet die Export-Gruppe im Colophon aus, solange keine Nächte vorliegen
+ * (Leerzustand der Nacht-Ansicht): die Buttons würden sonst nur leere
+ * CSV-/JSON-Dateien erzeugen. Das globale [hidden]-Reset in style.css
+ * (display:none !important) übersteuert das display:flex der Gruppe.
+ * Defensiv: fehlt die Gruppe im DOM, passiert schlicht nichts.
+ */
+function setExportAvailable(available) {
+  const group = document.querySelector(".export");
+  if (group) group.hidden = !available;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -342,9 +358,14 @@ function verdictFor(score) {
   return t("verdict.hard");
 }
 
+/** Sequenz-Guard des Count-ups: ein neuer renderScore-Aufruf (z.B. beim
+ *  Live-Umschalten von prefers-reduced-motion) stoppt eine laufende Animation. */
+let scoreAnimSeq = 0;
+
 function renderScore(report, animate = true) {
   const target = isNum(report.sleep_score) ? Math.round(report.sleep_score) : null;
   const valueEl = el("score-value");
+  const seq = ++scoreAnimSeq; // entwertet jede noch laufende Count-up-Schleife
   el("score-verdict").textContent = verdictFor(target);
 
   if (target === null) { valueEl.textContent = "–"; return; }
@@ -356,6 +377,7 @@ function renderScore(report, animate = true) {
   const dur = 1500;
   const t0 = performance.now();
   const tick = (now) => {
+    if (seq !== scoreAnimSeq) return; // ein neuerer Aufruf hat übernommen
     const p = Math.min(1, (now - t0) / dur);
     const eased = 1 - Math.pow(1 - p, 4);
     valueEl.textContent = String(Math.round(target * eased));
@@ -872,9 +894,23 @@ function makeTooltipHandler() {
     time.textContent =
       `${t("common.fromToClock", { from: fmtClock(segment.start), to: fmtClock(segment.end) })} · ${fmtMinutes(dur)}`;
     tip.append(head, time);
-    tip.style.left = `${Math.max(90, Math.min(window.innerWidth - 90, x))}px`;
-    tip.style.top = `${Math.max(60, y)}px`;
+    // Erst einblenden, DANN messen: mit [hidden] (display:none) wäre
+    // offsetWidth 0. Beides passiert im selben Frame, vor dem Paint.
     tip.hidden = false;
+    // Position vor der Messung neutralisieren (left:0 ⇒ volle Viewportbreite
+    // verfügbar): bei position:fixed + width:auto hängt die Shrink-to-fit-Breite
+    // vom aktuellen left ab; ein stale left aus dem vorherigen Aufruf würde die
+    // gemessene Breite — und damit die Klemmung — verfälschen (v.a. <=480px mit
+    // white-space:normal).
+    tip.style.left = "0px";
+    // An der tatsächlichen halben Tooltip-Breite klemmen, damit auf schmalen
+    // Viewports (z.B. 375px) nichts über den Rand ragt — body clippt
+    // overflow-x und würde den Tooltip sonst abschneiden.
+    const half = (tip.offsetWidth / 2) || 90;
+    const minX = 12 + half;
+    const maxX = window.innerWidth - 12 - half;
+    tip.style.left = `${maxX < minX ? window.innerWidth / 2 : Math.max(minX, Math.min(maxX, x))}px`;
+    tip.style.top = `${Math.max(60, y)}px`;
   };
 }
 
@@ -882,8 +918,14 @@ function makeTooltipHandler() {
  * 3D-Szene booten (mit sauberem Fallback)
  * ------------------------------------------------------------------------- */
 
+/** Controller der laufenden Szene ({dispose}) + zuletzt übergebener Report —
+ *  für den Neustart beim Live-Umschalten von prefers-reduced-motion. */
+let sceneController = null;
+let sceneReport = null;
+
 async function bootScene(report) {
   const canvas = document.getElementById("sky");
+  sceneReport = report; // auch null ist gültig (Leer-/Fehlerzustand)
 
   // Früh prüfen, ob WebGL überhaupt verfügbar ist — sonst gar nicht erst laden.
   let glOk = false;
@@ -910,6 +952,7 @@ async function bootScene(report) {
     if (!scene) {
       document.body.classList.add("no-webgl");
     } else {
+      sceneController = scene;
       canvas.classList.add("is-live");
     }
   } catch (err) {
@@ -918,6 +961,45 @@ async function bootScene(report) {
     document.body.classList.add("no-webgl");
   }
 }
+
+/* ------------------------------------------------------------------------- *
+ * prefers-reduced-motion live umschalten (OS-Einstellung bei offener Seite)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Reagiert auf einen Wechsel der OS-Einstellung „Bewegung reduzieren", ohne
+ * dass die Seite neu geladen werden muss: aktualisiert das Flag, beendet ein
+ * evtl. laufendes Score-Hochzählen (Endwert steht sofort) und bootet die
+ * 3D-Szene mit dem neuen Flag neu — scene.js liefert dafür ein vollständiges
+ * dispose() (Listener, Geometrien, Renderer). Defensiv: ohne Listener-Support
+ * (sehr alte WebViews) bleibt schlicht das Startverhalten bestehen.
+ */
+function onReducedMotionChange(ev) {
+  REDUCED_MOTION = typeof ev?.matches === "boolean" ? ev.matches : REDUCED_MOTION_MQ.matches;
+
+  // Count-up live umschalten: der Sequenz-Guard in renderScore stoppt eine
+  // laufende Animation, der Zielwert steht sofort.
+  if (lastReport) {
+    try { renderScore(lastReport, false); } catch { /* Anzeige bleibt stehen */ }
+  }
+
+  // Szene mit aktualisiertem Flag neu booten — nur wenn sie tatsächlich läuft
+  // (nicht im no-webgl-Fallback und nicht während des ersten Boots).
+  if (sceneController && !document.body.classList.contains("no-webgl")) {
+    try { sceneController.dispose(); } catch { /* Szene ist reine Kür */ }
+    sceneController = null;
+    document.getElementById("sky")?.classList.remove("is-live");
+    bootScene(sceneReport);
+  }
+}
+
+try {
+  if (typeof REDUCED_MOTION_MQ.addEventListener === "function") {
+    REDUCED_MOTION_MQ.addEventListener("change", onReducedMotionChange);
+  } else if (typeof REDUCED_MOTION_MQ.addListener === "function") {
+    REDUCED_MOTION_MQ.addListener(onReducedMotionChange); // ältere WebKit-Versionen
+  }
+} catch { /* Feature-Detection: kein change-Listener → Verhalten wie bisher */ }
 
 /* ------------------------------------------------------------------------- *
  * Haupt-Ablauf
@@ -957,6 +1039,8 @@ async function main() {
   if (!report) {
     // First-Run: 0 Berichte → Onboarding in #state-empty montieren (VOR
     // showState("empty"), damit der Inhalt beim Einblenden schon steht).
+    // Export ausblenden: ohne Nächte gäbe es nur leere Dateien.
+    setExportAvailable(false);
     window.SomnoscopeOnboarding?.init(0);
     showState("empty");
     bootScene(null);
@@ -965,6 +1049,7 @@ async function main() {
 
   lastReport = report;
   lastHistory = history;
+  setExportAvailable(true); // Daten vorhanden → Export (wieder) anbieten
   // Daten vorhanden → ein evtl. montiertes Onboarding sauber zurückbauen.
   window.SomnoscopeOnboarding?.init(Math.max(1, history.length));
 

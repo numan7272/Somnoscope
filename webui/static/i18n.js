@@ -72,7 +72,9 @@ export const MESSAGES = {
     "verdict.hard": "Eine schwere Nacht.",
     "strip.caption": "Verlauf der Nacht",
     "strip.aria": "Schlafphasen-Verlauf von {from} bis {to} Uhr",
+    "strip.defaultAria": "Schlafphasen-Verlauf der Nacht",
 
+    "report.h1": "Diese Nacht",
     "chapter.night": "Die Nacht im Verlauf",
     "chapter.metrics": "Kennzahlen",
     "chapter.vitals": "Vitalwerte",
@@ -121,6 +123,7 @@ export const MESSAGES = {
     "climate.avgNote": "Durchschnitt",
 
     "history.aria": "Schlaf-Score der letzten {n} Nächte, von {from} bis {to}",
+    "history.defaultAria": "Schlaf-Score der letzten Nächte",
     "history.barTitle": "{date}: Score {score}",
 
     "coach.cardAria": "Coaching-Empfehlung des lokalen Schlaf-Coach",
@@ -182,6 +185,11 @@ export const MESSAGES = {
     "trends.ariaStages": "Gestapeltes Balkendiagramm: Schlafphasen je Nacht über {range}",
     "trends.ariaEff": "Liniendiagramm: Schlafeffizienz über {range}",
     "trends.ariaHrv": "Liniendiagramm: HRV über {range}",
+    // Default-aria-labels für den Pre-Render-/Leerzustand der Charts (index.html).
+    "trends.ariaScoreDefault": "Liniendiagramm: Schlaf-Score im Verlauf",
+    "trends.ariaStagesDefault": "Gestapeltes Balkendiagramm: Schlafphasen je Nacht",
+    "trends.ariaEffDefault": "Liniendiagramm: Schlafeffizienz im Verlauf",
+    "trends.ariaHrvDefault": "Liniendiagramm: HRV im Verlauf",
 
     "system.title": "System",
     "system.loading": "Der Systemstatus wird geladen …",
@@ -226,6 +234,7 @@ export const MESSAGES = {
     "onboarding.step2Title": "Demo-Historie erzeugen",
     "onboarding.step2a": "Starte ",
     "onboarding.step2b": " im Projektordner: 30 synthetische Nächte zum Erkunden.",
+    "onboarding.step2Docker": "Im Docker-Setup: ",
     "onboarding.step3Title": "Dashboard erkunden",
     "onboarding.step3Text": "Danach neu laden. Score-Orb, Hypnogramm, Verlauf und System-Ansicht warten schon.",
     "onboarding.refresh": "Nach Nächten suchen",
@@ -239,7 +248,7 @@ export const MESSAGES = {
     "masthead.role": "Sleep · Observatory",
 
     "nav.aria": "Switch view",
-    "nav.night": "Tonight",
+    "nav.night": "Last night",
     "nav.trends": "Trends",
     "nav.system": "System",
 
@@ -269,7 +278,9 @@ export const MESSAGES = {
     "verdict.hard": "A rough night.",
     "strip.caption": "Course of the night",
     "strip.aria": "Sleep-stage timeline from {from} to {to}",
+    "strip.defaultAria": "Sleep-stage timeline of the night",
 
+    "report.h1": "Last night",
     "chapter.night": "The night as it unfolded",
     "chapter.metrics": "Key metrics",
     "chapter.vitals": "Vitals",
@@ -318,6 +329,7 @@ export const MESSAGES = {
     "climate.avgNote": "average",
 
     "history.aria": "Sleep score of the last {n} nights, from {from} to {to}",
+    "history.defaultAria": "Sleep score of the recent nights",
     "history.barTitle": "{date}: score {score}",
 
     "coach.cardAria": "Coaching recommendation from the local sleep coach",
@@ -379,6 +391,11 @@ export const MESSAGES = {
     "trends.ariaStages": "Stacked bar chart: sleep stages per night across {range}",
     "trends.ariaEff": "Line chart: sleep efficiency across {range}",
     "trends.ariaHrv": "Line chart: HRV across {range}",
+    // Default aria labels for the pre-render/empty state of the charts (index.html).
+    "trends.ariaScoreDefault": "Line chart: sleep score over time",
+    "trends.ariaStagesDefault": "Stacked bar chart: sleep stages per night",
+    "trends.ariaEffDefault": "Line chart: sleep efficiency over time",
+    "trends.ariaHrvDefault": "Line chart: HRV over time",
 
     "system.title": "System",
     "system.loading": "Loading system status …",
@@ -423,6 +440,7 @@ export const MESSAGES = {
     "onboarding.step2Title": "Create a demo history",
     "onboarding.step2a": "Run ",
     "onboarding.step2b": " in the project folder: 30 synthetic nights to explore.",
+    "onboarding.step2Docker": "In the Docker setup: ",
     "onboarding.step3Title": "Explore the dashboard",
     "onboarding.step3Text": "Then reload. The score orb, hypnogram, trends and system view are waiting.",
     "onboarding.refresh": "Check for nights",

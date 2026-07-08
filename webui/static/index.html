@@ -82,6 +82,10 @@
       <!-- Report-Ansicht -->
       <div id="report" hidden>
 
+        <!-- Semantische Hauptüberschrift der Nacht-Ansicht: nur für Screenreader,
+             visuell trägt der Score-Hero (Kapitel beginnen bei h2). -->
+        <h1 class="visually-hidden" data-i18n="report.h1">Diese Nacht</h1>
+
         <!-- HERO: Score-Orb (3D) + Zahl + Nacht-Spektrum -->
         <section class="hero" aria-labelledby="score-label">
           <div class="scene-anchor orb-anchor" data-anchor="orb" aria-hidden="true"></div>
@@ -96,7 +100,10 @@
               <span class="strip-caption" data-i18n="strip.caption">Verlauf der Nacht</span>
               <span id="strip-wake" class="strip-time"></span>
             </div>
-            <div class="strip-bar" id="strip-bar" role="img" aria-label=""></div>
+            <!-- Default-aria-label benennt den Pre-Render-Zustand; app.js
+                 (renderNightStrip) präzisiert nach dem Rendern wie gehabt. -->
+            <div class="strip-bar" id="strip-bar" role="img"
+                 aria-label="Schlafphasen-Verlauf der Nacht" data-i18n-aria="strip.defaultAria"></div>
           </div>
         </section>
 
@@ -154,7 +161,10 @@
             <span class="chapter-no" aria-hidden="true">V</span>
             <h2 id="h-history" data-i18n="chapter.history">Letzte Nächte</h2>
           </header>
-          <div class="history" id="history-strip" role="img" aria-label=""></div>
+          <!-- Default-aria-label benennt den Pre-Render-Zustand; app.js
+               (renderHistory) präzisiert nach dem Rendern wie gehabt. -->
+          <div class="history" id="history-strip" role="img"
+               aria-label="Schlaf-Score der letzten Nächte" data-i18n-aria="history.defaultAria"></div>
           <div class="history-dates" aria-hidden="true">
             <span id="history-from"></span><span id="history-to"></span>
           </div>
@@ -234,7 +244,10 @@
               <h2 id="h-t-score" data-i18n="trends.chScore">Score im Verlauf</h2>
             </header>
             <figure class="tchart">
-              <div class="tchart-plot" id="chart-score" role="img"></div>
+              <!-- Default-aria-label für den Pre-Render-Zustand; trends.js
+                   (setCaptions) präzisiert nach dem Rendern wie gehabt. -->
+              <div class="tchart-plot" id="chart-score" role="img"
+                   aria-label="Liniendiagramm: Schlaf-Score im Verlauf" data-i18n-aria="trends.ariaScoreDefault"></div>
               <figcaption id="chart-score-caption" class="visually-hidden"></figcaption>
             </figure>
           </section>
@@ -246,7 +259,8 @@
               <h2 id="h-t-stages" data-i18n="trends.chStages">Phasen über die Nächte</h2>
             </header>
             <figure class="tchart">
-              <div class="tchart-plot" id="chart-stages" role="img"></div>
+              <div class="tchart-plot" id="chart-stages" role="img"
+                   aria-label="Gestapeltes Balkendiagramm: Schlafphasen je Nacht" data-i18n-aria="trends.ariaStagesDefault"></div>
               <figcaption id="chart-stages-caption" class="visually-hidden"></figcaption>
             </figure>
             <ul class="trend-legend" id="stages-legend"></ul>
@@ -264,7 +278,8 @@
                   <span class="tchart-label" id="label-eff" data-i18n="trends.labelEff">Schlafeffizienz</span>
                   <span class="tchart-avg" id="avg-eff"></span>
                 </div>
-                <div class="tchart-plot tchart-plot--small" id="chart-eff" role="img"></div>
+                <div class="tchart-plot tchart-plot--small" id="chart-eff" role="img"
+                     aria-label="Liniendiagramm: Schlafeffizienz im Verlauf" data-i18n-aria="trends.ariaEffDefault"></div>
                 <figcaption id="chart-eff-caption" class="visually-hidden"></figcaption>
               </figure>
               <figure class="tchart">
@@ -272,7 +287,8 @@
                   <span class="tchart-label" id="label-hrv" data-i18n="trends.labelHrv">HRV</span>
                   <span class="tchart-avg" id="avg-hrv"></span>
                 </div>
-                <div class="tchart-plot tchart-plot--small" id="chart-hrv" role="img"></div>
+                <div class="tchart-plot tchart-plot--small" id="chart-hrv" role="img"
+                     aria-label="Liniendiagramm: HRV im Verlauf" data-i18n-aria="trends.ariaHrvDefault"></div>
                 <figcaption id="chart-hrv-caption" class="visually-hidden"></figcaption>
               </figure>
             </div>

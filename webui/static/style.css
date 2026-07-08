@@ -908,6 +908,7 @@ body.no-webgl .orb-anchor::before {
   color: var(--ink);
   box-shadow: 0 8px 30px rgba(2, 4, 14, 0.6);
   white-space: nowrap;
+  max-width: calc(100vw - 24px); /* nie breiter als der Viewport (JS klemmt zusätzlich) */
   transform: translate(-50%, calc(-100% - 14px));
 }
 .tooltip .tt-stage { font-weight: 600; letter-spacing: 0.04em; }
@@ -917,6 +918,11 @@ body.no-webgl .orb-anchor::before {
   color: var(--dim);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+}
+/* Schmale Viewports: Umbruch erlauben, damit der Inhalt innerhalb der
+   max-width bleibt — body clippt overflow-x und würde sonst abschneiden. */
+@media (max-width: 480px) {
+  .tooltip { white-space: normal; }
 }
 
 /* --- Entrance-Choreografie ------------------------------------------------------ */
